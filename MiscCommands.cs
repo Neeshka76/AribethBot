@@ -20,6 +20,59 @@ namespace AribethBot
             this.handler = handler;
         }
 
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        [RequireBotPermission(GuildPermission.ManageMessages)]
+        [SlashCommand("ratelimitinfos", "RateLimitInfos : get informations on the ratelimits")]
+        public async Task RateLimitInfos()
+        {
+            var options = new RequestOptions()
+            {
+                RatelimitCallback = MyRatelimitCallback
+            };
+            await RespondAsync($"Executing command", ephemeral: true);
+        }
+
+        public async Task MyRatelimitCallback(IRateLimitInfo info)
+        {
+            Console.WriteLine($"info.IsGlobal : {info.IsGlobal}\n" +
+                $"info.Limit : {info.Limit}\n" +
+                $"info.Remaining : {info.Remaining}\n" +
+                $"info.RetryAfter : {info.RetryAfter}\n" +
+                $"info.Reset : {info.Reset}\n" +
+                $"info.ResetAfter : {info.ResetAfter}\n" +
+                $"info.Bucket : {info.Bucket}\n" +
+                $"info.Lag : {info.Lag}\n" +
+                $"info.Endpoint : {info.Endpoint}");
+            await RespondAsync($"info.IsGlobal : {info.IsGlobal}\n" +
+                $"info.Limit : {info.Limit}\n" +
+                $"info.Remaining : {info.Remaining}\n" +
+                $"info.RetryAfter : {info.RetryAfter}\n" +
+                $"info.Reset : {info.Reset}\n" +
+                $"info.ResetAfter : {info.ResetAfter}\n" +
+                $"info.Bucket : {info.Bucket}\n" +
+                $"info.Lag : {info.Lag}\n" +
+                $"info.Endpoint : {info.Endpoint}",
+                ephemeral: true);
+        }
+
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        [RequireBotPermission(GuildPermission.ManageMessages)]
+        [SlashCommand("purge", "Purge messages from a channel where the command is executed", runMode:RunMode.Async)]
+        public async Task PurgeAsync()
+        {
+            //Important Contexts:
+            //Context.User;
+            //Context.Client;
+            //Context.Guild;
+            //Context.Message
+            //Context.Channel;
+            IEnumerable<IMessage> messages = await Context.Channel.GetMessagesAsync(100).FlattenAsync();
+            await RespondAsync($"Executing command in {Context.Channel.Name}", ephemeral: true);
+            foreach (IMessage message in messages) {
+                await message.DeleteAsync();
+            }
+        }
+
         public enum TimestampFormat
         {
             ShortTime,
