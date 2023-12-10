@@ -53,6 +53,7 @@ namespace AribethBot
             [Summary("Hour", "Hour : between 0 & 23")] int hour,
             [Summary("Minute", "Day : between 0 & 59")] int minute,
             [Summary("TimeZone", "TimeZone : values between -12 & 14 : for example CET is +1; CST is +8;")] int timeZone,
+            [Summary("DaylightSaving", "DaylightSaving : True between March and November/October, false for the rest of the year")] bool daylightSaving = false,
             [Summary("Format", "Format : choose between multiple format ")] TimestampFormat timestampFormat = TimestampFormat.LongDateShortTime)
         {
             bool error = ErrorInData(year, month, day, hour, minute, timeZone);
@@ -88,7 +89,7 @@ namespace AribethBot
             else
             {
                 DateTime dateTime = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Utc);
-                DateTime clientTime = dateTime.AddHours(-timeZone);
+                DateTime clientTime = dateTime.AddHours(-timeZone + (daylightSaving ? 1 : 0));
                 long unixTime = ((DateTimeOffset)clientTime).ToUnixTimeSeconds();
                 char timeStampChar = TimeStampChar(timestampFormat);
                 message = $"<t:{unixTime}:{timeStampChar}>";
