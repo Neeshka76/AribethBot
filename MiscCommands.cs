@@ -87,8 +87,8 @@ namespace AribethBot
             }
             else
             {
-                DateTime dateTime = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
-                DateTime clientTime = dateTime + TimeSpan.FromHours(timeZone);
+                DateTime dateTime = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Utc);
+                DateTime clientTime = dateTime.AddHours(-timeZone);
                 long unixTime = ((DateTimeOffset)clientTime).ToUnixTimeSeconds();
                 char timeStampChar = TimeStampChar(timestampFormat);
                 message = $"<t:{unixTime}:{timeStampChar}>";
