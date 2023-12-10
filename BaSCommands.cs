@@ -21,7 +21,7 @@ namespace AribethBot
             this.handler = handler;
         }
 
-        //Link WeaponCrafting
+        // Link WeaponCrafting
         [SlashCommand("weaponcraftingtutorial", "Link to the weapon crafting tutorial for B&S")]
         public async Task WeaponCrafting()
         {
