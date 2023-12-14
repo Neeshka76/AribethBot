@@ -12,20 +12,18 @@ namespace AribethBot
     public class CryptographyCommands : InteractionModuleBase<SocketInteractionContext>
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private CommandHandler handler;
         private Cryptography cryptography;
 
         // constructor injection is also a valid way to access the dependecies
-        public CryptographyCommands(CommandHandler handler)
+        public CryptographyCommands()
         {
-            this.handler = handler;
             cryptography = new Cryptography();
         }
 
         // Encrypt command
         [SlashCommand("encrypt", "Encrypt a message")]
-        public async Task Encrypt(  [Summary("Cipher", "Cipher to use for the encryption")] Cryptography.Cipher cipher, 
-                                    [Summary("Shift", "Shift to use for the cipher (use number without decimals)")] int shift, 
+        public async Task Encrypt([Summary("Cipher", "Cipher to use for the encryption")] Cryptography.Cipher cipher,
+                                    [Summary("Shift", "Shift to use for the cipher (use number without decimals)")] int shift,
                                     [Summary("MessageToEncrypt", "Message to encrypt with the cipher")] string messageToEncrypt)
         {
             string[] parameters =

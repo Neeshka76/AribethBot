@@ -31,7 +31,7 @@ namespace AribethBot
             this.services = services;
             socketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
-            socketConfig =  this.services.GetRequiredService<DiscordSocketConfig>();
+            socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
             logger = this.services.GetRequiredService<ILogger<CommandHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
@@ -83,6 +83,8 @@ namespace AribethBot
             if (!command.IsSpecified)
             {
                 logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                // failure scenario, let's let the user know
+                await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
                 return;
             }
 
@@ -93,17 +95,12 @@ namespace AribethBot
                 logger.LogInformation($"Command [{command.Value.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
                 return;
             }
-
-            // failure scenario, let's let the user know
-            await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
         }
 
         public async Task InitializeAsync()
         {
             // add the public modules that inherit InteractionModuleBase<T> to the InteractionService
             await interactions.AddModulesAsync(Assembly.GetEntryAssembly(), services);
-
-            
         }
 
         private async Task HandleInteraction(SocketInteraction arg)

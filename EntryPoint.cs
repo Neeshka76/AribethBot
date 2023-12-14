@@ -62,7 +62,7 @@ namespace AribethBot
             socketClient = services.GetRequiredService<DiscordSocketClient>();
             services.GetRequiredService<LoggingService>();
             //interactCommands = services.GetRequiredService<InteractionService>();
-            string? token = Environment.GetEnvironmentVariable("DiscordToken");
+            string? token = config["DiscordToken"];
 
             // setup logging and the ready event
             //client.Log += LogAsync;

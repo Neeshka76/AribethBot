@@ -134,7 +134,7 @@ namespace AribethBot
 
         private bool ErrorInData(int year, int month, int day, int hour, int minute, int timeZone)
         {
-            if (year > 3000 || year < 0)
+            if (year > 3000 || year < 1970)
             {
                 typeOfError = TypeOfError.Year;
                 return true;

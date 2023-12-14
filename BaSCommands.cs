@@ -1,6 +1,8 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,19 +15,19 @@ namespace AribethBot
     public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private CommandHandler handler;
+        private readonly IConfiguration config;
 
         // constructor injection is also a valid way to access the dependecies
-        public BaSCommands(CommandHandler handler)
+        public BaSCommands(IServiceProvider services)
         {
-            this.handler = handler;
+            config = services.GetRequiredService<IConfiguration>();
         }
 
         // Link WeaponCrafting
         [SlashCommand("weaponcraftingtutorial", "Link to the weapon crafting tutorial for B&S")]
         public async Task WeaponCrafting()
         {
-            string link = "https://youtu.be/-yjZAnniklM";
+            string link = config["WeaponCraftingLink"];
             await RespondAsync(link);
         }
 
@@ -216,15 +218,15 @@ namespace AribethBot
             {
                 if (hasPCVR & !hasNomad)
                 {
-                    
+
                 }
                 else if (!hasPCVR & hasNomad)
                 {
-                    
+
                 }
                 else
                 {
-                    
+
                 }
                 message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
             }

@@ -19,7 +19,6 @@ namespace AribethBot
             {
                 case Cipher.Caesar:
                     return CaesarCypher(true, parameters[0], parameters[1]);
-                    
             }
             return "Bad result, something is wrong Neeshka !";
         }
