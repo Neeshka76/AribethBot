@@ -22,7 +22,6 @@ namespace AribethBot
         private IConfiguration config;
         private DiscordSocketClient socketClient;
         private DiscordSocketConfig socketConfig;
-        //private InteractionService interactCommands;
         private static string logLevel;
 
         public static void Main(string[] args)
@@ -33,7 +32,7 @@ namespace AribethBot
             }
 
             Log.Logger = new LoggerConfiguration()
-                 .WriteTo.File("logs/AribethLog.log", rollingInterval: RollingInterval.Day)
+                 .WriteTo.File("Logs/AribethLog.log", rollingInterval: RollingInterval.Day)
                  .WriteTo.Console()
                  .CreateLogger();
             new EntryPoint().MainAsync().GetAwaiter().GetResult();
@@ -61,13 +60,8 @@ namespace AribethBot
             // you get the services via GetRequiredService<T>
             socketClient = services.GetRequiredService<DiscordSocketClient>();
             services.GetRequiredService<LoggingService>();
-            //interactCommands = services.GetRequiredService<InteractionService>();
             string? token = config["DiscordToken"];
 
-            // setup logging and the ready event
-            //client.Log += LogAsync;
-            //interactCommands.Log += LogAsync;
-            //client.Ready += ReadyAsync;
 
             // this is where we get the Token value from the configuration file, and start the bot
             await socketClient.LoginAsync(TokenType.Bot, token);
@@ -78,45 +72,6 @@ namespace AribethBot
 
             await Task.Delay(-1);
         }
-
-        //private Task LogAsync(LogMessage log)
-        //{
-        //    Console.WriteLine(log.ToString());
-        //    return Task.CompletedTask;
-        //}
-
-        //private async Task ReadyAsync()
-        //{
-        //    // this is where you put the id of the test discord guild
-        //
-        //    if (IsDebug())
-        //    {
-        //        Console.WriteLine($"In Debug mode !");
-        //        await ConfigureCommands();
-        //    }
-        //    else
-        //    {
-        //        Console.WriteLine($"In Runtime mode !");
-        //        await ConfigureCommands();
-        //    }
-        //    Console.WriteLine($"Connected as -> [{client.CurrentUser}] :)");
-        //    await client.SetGameAsync("over Neverwinter", type: ActivityType.Watching);
-        //}
-
-        //private async Task<Task> ConfigureCommands()
-        //{
-        //    Console.WriteLine($"Purging Global Commands");
-        //    await client.Rest.DeleteAllGlobalCommandsAsync();
-        //    IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
-        //    foreach (SocketGuild guild in guilds)
-        //    {
-        //        Console.WriteLine($"Purging Application Commands for {guild.Id}...");
-        //        await guild.DeleteApplicationCommandsAsync();
-        //        await interactCommands.RegisterCommandsToGuildAsync(guild.Id);
-        //        Console.WriteLine($"Adding commands to {guild.Id}...");
-        //    }
-        //    return Task.CompletedTask;
-        //}
 
 
         // this method handles the ServiceCollection creation/configuration, and builds out the service provider we can call on later
@@ -166,19 +121,8 @@ namespace AribethBot
             {
                 services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Information);
             }
-
             ServiceProvider serviceProvider = services.BuildServiceProvider();
             return serviceProvider;
         }
-
-        static bool IsDebug()
-        {
-#if DEBUG
-            return true;
-#else
-                return false;
-#endif
-        }
-
     }
 }

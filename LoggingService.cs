@@ -40,12 +40,12 @@ namespace AribethBot
             if (IsDebug())
             {
                 logger.LogInformation($"In Debug mode !");
-                await ConfigureCommands();
+                //await ConfigureCommands();
             }
             else
             {
                 logger.LogInformation($"In Runtime mode !");
-                await ConfigureCommands();
+                //await ConfigureCommands();
             }
             logger.LogInformation($"Connected as -> [{client.CurrentUser}] :)");
             logger.LogInformation($"We are on [{client.Guilds.Count}] servers");

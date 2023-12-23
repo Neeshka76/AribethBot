@@ -17,13 +17,14 @@ namespace AribethBot
     public class CommandHandler
     {
         private readonly IServiceProvider services;
-        private readonly DiscordSocketClient socketClient;
-        private readonly InteractionService interactions;
+        public readonly DiscordSocketClient socketClient;
+        public readonly InteractionService interactions;
 
-        private readonly DiscordSocketConfig socketConfig;
-        private readonly ILogger logger;
-        private readonly CommandService commands;
-        private readonly IConfiguration config;
+        public readonly DiscordSocketConfig socketConfig;
+        public readonly ILogger logger;
+        public readonly CommandService commands;
+        public readonly IConfiguration config;
+        public readonly HttpClient httpClient;
 
 
         public CommandHandler(IServiceProvider services)
@@ -35,7 +36,7 @@ namespace AribethBot
             logger = this.services.GetRequiredService<ILogger<CommandHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
-
+            httpClient = new HttpClient();
             // process the InteractionCreated payloads to execute Interactions commands
             socketClient.InteractionCreated += HandleInteraction;
             // process the command execution results 
@@ -123,90 +124,102 @@ namespace AribethBot
             }
         }
 
-        private Task ComponentCommandExecuted(ComponentCommandInfo arg1, IInteractionContext arg2, Discord.Interactions.IResult arg3)
+        private Task ComponentCommandExecuted(ComponentCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
-            if (!arg3.IsSuccess)
+            if (!result.IsSuccess)
             {
-                switch (arg3.Error)
+                /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
-                }
+                }*/
+                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
-
+            else
+            {
+                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+            }
             return Task.CompletedTask;
         }
 
-        private Task ContextCommandExecuted(ContextCommandInfo arg1, IInteractionContext arg2, Discord.Interactions.IResult arg3)
+        private Task ContextCommandExecuted(ContextCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
-            if (!arg3.IsSuccess)
+            if (!result.IsSuccess)
             {
-                switch (arg3.Error)
+                /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
-                }
+                }*/
+                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
-
+            else
+            {
+                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+            }
             return Task.CompletedTask;
         }
 
-        private Task SlashCommandExecuted(SlashCommandInfo arg1, IInteractionContext arg2, Discord.Interactions.IResult arg3)
+        private Task SlashCommandExecuted(SlashCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
-            if (!arg3.IsSuccess)
+            if (!result.IsSuccess)
             {
-                switch (arg3.Error)
+                /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        // implement
+                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
-                }
+                }*/
+                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
-
+            else
+            {
+                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+            }
             return Task.CompletedTask;
         }
     }

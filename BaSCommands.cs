@@ -18,9 +18,9 @@ namespace AribethBot
         private readonly IConfiguration config;
 
         // constructor injection is also a valid way to access the dependecies
-        public BaSCommands(IServiceProvider services)
+        public BaSCommands(CommandHandler handler)
         {
-            config = services.GetRequiredService<IConfiguration>();
+            config = handler.config;
         }
 
         // Link WeaponCrafting
