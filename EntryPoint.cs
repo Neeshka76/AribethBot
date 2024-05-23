@@ -43,12 +43,10 @@ namespace AribethBot
             socketConfig = new DiscordSocketConfig
             {
                 MessageCacheSize = 100,
-                GatewayIntents = GatewayIntents.MessageContent |
-                                 GatewayIntents.GuildMessages |
-                                 GatewayIntents.Guilds |
-                                 GatewayIntents.GuildMembers |
-                                 GatewayIntents.GuildBans,
-                UseInteractionSnowflakeDate = false
+                GatewayIntents = GatewayIntents.All,
+                UseInteractionSnowflakeDate = false,
+                LogGatewayIntentWarnings = false,
+                AlwaysDownloadUsers = true,
             };
             IConfigurationBuilder builder = new ConfigurationBuilder()
                                             .SetBasePath(AppContext.BaseDirectory)
@@ -61,7 +59,6 @@ namespace AribethBot
             socketClient = services.GetRequiredService<DiscordSocketClient>();
             services.GetRequiredService<LoggingService>();
             string? token = config["DiscordToken"];
-
 
             // this is where we get the Token value from the configuration file, and start the bot
             await socketClient.LoginAsync(TokenType.Bot, token);
@@ -89,6 +86,8 @@ namespace AribethBot
                 .AddSingleton<CommandService>()
                 .AddSingleton<CommandHandler>()
                 .AddSingleton<LoggingService>()
+                .AddSingleton<TriggerHandler>()
+                .AddSingleton<DiscordLogger>()
                 .AddLogging(configure => configure.AddSerilog());
 
             if (!string.IsNullOrEmpty(logLevel))

@@ -23,9 +23,10 @@ namespace AribethBot
         public readonly DiscordSocketConfig socketConfig;
         public readonly ILogger logger;
         public readonly CommandService commands;
-        public readonly IConfiguration config;
+        public IConfiguration config;
         public readonly HttpClient httpClient;
-
+        public readonly TriggerHandler triggerHandler;
+        public readonly DiscordLogger discordLogger;
 
         public CommandHandler(IServiceProvider services)
         {
@@ -37,6 +38,8 @@ namespace AribethBot
             commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
             httpClient = new HttpClient();
+            triggerHandler = this.services.GetRequiredService<TriggerHandler>();
+            discordLogger = this.services.GetRequiredService<DiscordLogger>();
             // process the InteractionCreated payloads to execute Interactions commands
             socketClient.InteractionCreated += HandleInteraction;
             // process the command execution results 
@@ -44,38 +47,18 @@ namespace AribethBot
             interactions.ContextCommandExecuted += ContextCommandExecuted;
             interactions.ComponentCommandExecuted += ComponentCommandExecuted;
             commands.CommandExecuted += Commands_CommandExecuted;
-            socketClient.MessageReceived += Client_MessageReceived;
         }
 
-        private async Task Client_MessageReceived(SocketMessage rawMessage)
+        private bool HasRole(SocketGuildUser guildUser, string roleString)
         {
-            // ensures we don't process system/other bot messages
-            if (!(rawMessage is SocketUserMessage message))
+            foreach (SocketRole role in guildUser.Roles)
             {
-                return;
+                if (roleString == role.Name)
+                {
+                    return true;
+                }
             }
-
-            if (message.Source != MessageSource.User)
-            {
-                return;
-            }
-
-            // sets the argument position away from the prefix we set
-            int argPos = 0;
-
-            // get prefix from the configuration file
-            char prefix = Char.Parse(config["Prefix"]);
-
-            // determine if the message has a valid prefix, and adjust argPos based on prefix
-            if (!(message.HasMentionPrefix(socketClient.CurrentUser, ref argPos) || message.HasCharPrefix(prefix, ref argPos)))
-            {
-                return;
-            }
-
-            SocketCommandContext context = new SocketCommandContext(socketClient, message);
-
-            // execute command if one is found that matches
-            await commands.ExecuteAsync(context, argPos, services);
+            return false;
         }
 
         private async Task Commands_CommandExecuted(Optional<CommandInfo> command, ICommandContext context, Discord.Commands.IResult result)
@@ -148,7 +131,7 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {
@@ -181,7 +164,7 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {
@@ -214,7 +197,7 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {

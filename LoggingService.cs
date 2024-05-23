@@ -40,30 +40,54 @@ namespace AribethBot
             if (IsDebug())
             {
                 logger.LogInformation($"In Debug mode !");
-                //await ConfigureCommands();
+                //await PurgeGlobalCommands();
+                await ConfigureLocalCommands();
             }
             else
             {
                 logger.LogInformation($"In Runtime mode !");
-                //await ConfigureCommands();
+                await PurgeLocalCommands();
+                await ConfigureGlobalCommands();
             }
             logger.LogInformation($"Connected as -> [{client.CurrentUser}] :)");
             logger.LogInformation($"We are on [{client.Guilds.Count}] servers");
             await client.SetGameAsync("over Neverwinter", type: ActivityType.Watching);
         }
 
-        private async Task<Task> ConfigureCommands()
+        private async Task<Task> PurgeGlobalCommands()
         {
+            IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
             logger.LogInformation($"Purging Global Commands");
             await client.Rest.DeleteAllGlobalCommandsAsync();
+            return Task.CompletedTask;
+        }
+        private async Task<Task> PurgeLocalCommands()
+        {
             IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
             foreach (SocketGuild guild in guilds)
             {
                 logger.LogInformation($"Purging Application Commands for {guild.Id}...");
                 await guild.DeleteApplicationCommandsAsync();
-                await interactCommands.RegisterCommandsToGuildAsync(guild.Id);
-                logger.LogInformation($"Adding commands to {guild.Id}...");
+                await Task.Delay(500);
             }
+            return Task.CompletedTask;
+        }
+
+        private async Task<Task> ConfigureLocalCommands()
+        {
+            IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
+            foreach (SocketGuild guild in guilds)
+            {
+                logger.LogInformation($"Adding commands to {guild.Id}...");
+                await interactCommands.RegisterCommandsToGuildAsync(guild.Id);
+                await Task.Delay(500);
+            }
+            return Task.CompletedTask;
+        }
+        private async Task<Task> ConfigureGlobalCommands()
+        {
+            logger.LogInformation($"Adding Global Commands");
+            await interactCommands.RegisterCommandsGloballyAsync();
             return Task.CompletedTask;
         }
 
@@ -104,7 +128,6 @@ namespace AribethBot
                         break;
                     }
             }
-
             return Task.CompletedTask;
         }
 
