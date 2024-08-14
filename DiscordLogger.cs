@@ -76,6 +76,7 @@ namespace AribethBot
                 embedBuilder.Color = Color.Blue;
                 await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
             }
+
             // Left and was in one channel
             if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel == null)
             {
@@ -84,6 +85,7 @@ namespace AribethBot
                 embedBuilder.Color = Color.Red;
                 await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
             }
+
             // Switch from a channel to another channel
             if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel != null && voiceStateBefore.VoiceChannel != voiceStateAfter.VoiceChannel)
             {
@@ -96,6 +98,7 @@ namespace AribethBot
                 embedBuilder.Color = Color.Blue;
                 await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
             }
+
             if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel != null && voiceStateBefore.VoiceChannel == voiceStateAfter.VoiceChannel)
             {
                 // Started a streaming
@@ -106,6 +109,7 @@ namespace AribethBot
                     embedBuilder.Color = Color.Purple;
                     await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
                 }
+
                 // Ended a streaming
                 if (voiceStateBefore.IsStreaming && !voiceStateAfter.IsStreaming)
                 {
@@ -141,11 +145,78 @@ namespace AribethBot
                 else
                     roles += "; " + role.Mention;
             }
-            embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} \n" +
-                $"**Roles : ** {roles}";
+
+            embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} ({ReturnDateTimeOffsetDifference(guildUser.JoinedAt)}) \n" +
+                                       $"**Roles : ** {roles}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
             await channelEntryOut.SendMessageAsync(embed: embedBuilder.Build());
+        }
+
+        private string ReturnDateTimeOffsetDifference(DateTimeOffset? startDate)
+        {
+            DateTimeOffset endDate = DateTimeOffset.Now;
+            DateTimeOffset actualStartDate = startDate ?? new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            if (startDate == null)
+                return "";
+            // Calculate the difference in years, months, days, hours, minutes and seconds
+            int years = endDate.Year - actualStartDate.Year;
+            int months = endDate.Month - actualStartDate.Month;
+            int days = endDate.Day - actualStartDate.Day;
+            int hours = endDate.Hour - actualStartDate.Hour;
+            int minutes = endDate.Minute - actualStartDate.Minute;
+            int seconds = endDate.Second - actualStartDate.Second;
+
+            if (seconds < 0)
+            {
+                minutes--;
+                seconds += 60;
+            }
+
+            if (minutes < 0)
+            {
+                hours--;
+                minutes += 60;
+            }
+
+            if (hours < 0)
+            {
+                days--;
+                hours += 24;
+            }
+
+            if (days < 0)
+            {
+                months--;
+                days += DateTime.DaysInMonth(actualStartDate.Year, (actualStartDate.Month + months) % 12);
+            }
+
+            if (months < 0)
+            {
+                years--;
+                months += 12;
+            }
+
+
+            string dateStrToReturn = "";
+            if (years != 0)
+                dateStrToReturn += years + $" year{(years == 1 ? "" : "s")},";
+            if (months != 0)
+                dateStrToReturn += " " + months + $" month{(months == 1 ? "" : "s")},";
+            if (days != 0)
+                dateStrToReturn += " " + days + $" day{(days == 1 ? "" : "s")},";
+            if (hours != 0)
+                dateStrToReturn += " " + hours + $" hour{(hours == 1 ? "" : "s")},";
+            if (minutes != 0)
+                dateStrToReturn += " " + minutes + $" minute{(minutes == 1 ? "" : "s")},";
+            if (seconds != 0)
+                dateStrToReturn += " " + seconds + $" second{(seconds == 1 ? "" : "s")}";
+            if (dateStrToReturn.EndsWith(','))
+                dateStrToReturn = dateStrToReturn.Substring(0, dateStrToReturn.Length - 1);
+            if (dateStrToReturn.StartsWith(" "))
+                dateStrToReturn = dateStrToReturn.Substring(1);
+
+            return dateStrToReturn;
         }
 
         private async Task SocketClient_UserJoined(SocketGuildUser guildUser)
@@ -156,7 +227,7 @@ namespace AribethBot
             embedBuilder.WithAuthor(guildUser.Username, guildUser.GetAvatarUrl());
             embedBuilder.Title = $"Member joined";
             embedBuilder.Description = $"{guildUser.Mention} {guildUser.Guild.MemberCount}th to join\n" +
-                $"created at {guildUser.CreatedAt}";
+                                       $"created at {guildUser.CreatedAt} ({ReturnDateTimeOffsetDifference(guildUser.CreatedAt)})";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Green;
             await channelEntryOut.SendMessageAsync(embed: embedBuilder.Build());
@@ -171,7 +242,7 @@ namespace AribethBot
             embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
             embedBuilder.Title = $"Unban";
             embedBuilder.Description =
-                $"**Offender : **{user.Username} {user.Mention}";/*\n" +
+                $"**Offender : **{user.Username} {user.Mention}"; /*\n" +
                 $"**Reason : ** {restBan.Reason}"; \n" +
                 $"**Responsible moderator : {restBan.}**";*/
             embedBuilder.WithCurrentTimestamp();
@@ -189,7 +260,7 @@ namespace AribethBot
             embedBuilder.Title = $"Ban";
             embedBuilder.Description =
                 $"**Offender : **{user.Username} {user.Mention}\n" +
-                $"**Reason : ** {restBan.Reason}";/* \n" +
+                $"**Reason : ** {restBan.Reason}"; /* \n" +
                 $"**Responsible moderator : {restBan.}**";*/
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
@@ -211,6 +282,7 @@ namespace AribethBot
             {
                 return;
             }
+
             SocketUser user = userMessage.Author;
 
             EmbedBuilder embedBuilder = new EmbedBuilder();
@@ -237,13 +309,18 @@ namespace AribethBot
             {
                 return;
             }
+
+            // Ensure that the message isn't the same (cause by embedded)
+            if (updatedMessage.Content == userMessage.Content)
+                return;
+
             SocketUser user = userMessage.Author;
 
             EmbedBuilder embedBuilder = new EmbedBuilder();
             embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
             embedBuilder.Title = $"Message updated in <#{userMessage.Channel.Id}>";
             embedBuilder.Description = $"**Before : **\n{userMessage.Content}\n" +
-                $"**After : **\n{updatedMessage.Content}";
+                                       $"**After : **\n{updatedMessage.Content}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Blue;
             await channelEdited.SendMessageAsync(embed: embedBuilder.Build());

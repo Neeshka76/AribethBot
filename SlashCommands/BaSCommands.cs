@@ -96,10 +96,10 @@ namespace AribethBot
             string messagePCVR =
                 $"# For PCVR \r\n" +
                 $"Open the explorer then in the address bar, entering this string into the box that appears, and pressing enter.\r\n\r\n" +
-                $"```%userprofile%\\AppData\\LocalLow\\WarpFrog\\BladeAndSorcery\\```\r\n";
+                $"```{config["PCVRLog"]}```\r\n";
             string messageNomad =
                 $"# For Nomad \r\n" +
-                "Follow the instructions on this link : <https://warpfrog.notion.site/Retrieve-your-game-log-file-cc3c723074be479a8284569055c5afcf>\r\n\r\n";
+                $"Follow the instructions on this link : <{config["NomadLog"]}>\r\n\r\n";
             string messageOutro =
             $"Drag the file called **Player.Log** (or possibly just **Player**) into this channel on Discord.\r\n\r\n" +
             $"*Command triggered by {contextUser.Mention} with /log @user*";
@@ -163,10 +163,10 @@ namespace AribethBot
                 $"To find your saves folder, open the explorer then in the address bar, entering this string into the box that appears, and pressing enter.\r\n";
             string messagePCVR =
                 $"# For PCVR \r\n" +
-                $"```%userprofile%\\Documents\\My Games\\BladeAndSorcery\\Saves\\```\r\n";
+                $"```{config["PCVRSave"]}```\r\n";
             string messageNomad =
                 $"# For Nomad \r\n" +
-                "```This PC\\Quest 2\\Internal shared storage\\Android\\data\\com.Warpfrog.BladeAndSorcery\\files\\Saves```\r\n\r\n";
+                $"```{config["NomadSave"]}```\r\n\r\n";
             string messageOutro =
             $"Deleting the file called **Options.opt** (or possibly just **Options**) will reset all applied settings.  The other files are your characters, which includes their appearance and loadouts..\r\n\r\n" +
             $"*Command triggered by {contextUser.Mention} with /save @user*";
@@ -230,10 +230,10 @@ namespace AribethBot
                 $"To find your crash folder, open the explorer then in the address bar, entering this string into the box that appears, and pressing enter.\r\n";
             string messagePCVR =
                 $"# For PCVR \r\n" +
-                $"```%temp%\\WarpFrog\\BladeAndSorcery\\Crashes```\r\n";
+                $"```{config["PCVRCrash"]}```\r\n";
             string messageNomad =
                 $"# For Nomad \r\n" +
-                "```This PC\\Quest 2\\Internal shared storage\\Android\\data\\com.Warpfrog.BladeAndSorcery\\files\\Crashes```\r\n\r\n";
+                $"```{config["NomadCrash"]}```\r\n\r\n";
             string messageOutro =
             $"Then go inside the most recent one and drag the file called **Player.log** (or possibly just **Player**) ***and*** the file called **crash.dmp** (or possibly just **crash**) into this channel on Discord.\r\n\r\n" +
             $"*Command triggered by {contextUser.Mention} with /crash @user*";
