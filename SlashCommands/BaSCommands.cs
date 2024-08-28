@@ -17,10 +17,10 @@ namespace AribethBot
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
         private IConfiguration config;
-        private CommandHandler handler;
+        private ServiceHandler handler;
 
         // constructor injection is also a valid way to access the dependecies
-        public BaSCommands(CommandHandler handler)
+        public BaSCommands(ServiceHandler handler)
         {
             config = handler.config;
             this.handler = handler;

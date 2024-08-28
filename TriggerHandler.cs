@@ -32,7 +32,7 @@ namespace AribethBot
             socketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
             socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
-            logger = this.services.GetRequiredService<ILogger<CommandHandler>>();
+            logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
             httpClient = new HttpClient();

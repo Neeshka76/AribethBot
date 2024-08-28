@@ -58,14 +58,15 @@ namespace AribethBot
             // you get the services via GetRequiredService<T>
             socketClient = services.GetRequiredService<DiscordSocketClient>();
             services.GetRequiredService<LoggingService>();
+            services.GetRequiredService<DiscordLogger>();
             string? token = config["DiscordToken"];
 
             // this is where we get the Token value from the configuration file, and start the bot
             await socketClient.LoginAsync(TokenType.Bot, token);
             await socketClient.StartAsync();
 
-            // we get the CommandHandler class here and call the InitializeAsync method to start things up for the CommandHandler service
-            await services.GetRequiredService<CommandHandler>().InitializeAsync();
+            // we get the ServiceHandler class here and call the InitializeAsync method to start things up for the ServiceHandler service
+            await services.GetRequiredService<ServiceHandler>().InitializeAsync();
 
             await Task.Delay(-1);
         }
@@ -84,9 +85,8 @@ namespace AribethBot
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>()))
                 .AddSingleton<CommandService>()
-                .AddSingleton<CommandHandler>()
+                .AddSingleton<ServiceHandler>()
                 .AddSingleton<LoggingService>()
-                .AddSingleton<TriggerHandler>()
                 .AddSingleton<DiscordLogger>()
                 .AddLogging(configure => configure.AddSerilog());
 

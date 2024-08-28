@@ -22,7 +22,7 @@ namespace AribethBot
         private readonly HttpClient httpClient;
 
         // constructor injection is also a valid way to access the dependencies
-        public ServerCommands(CommandHandler handler)
+        public ServerCommands(ServiceHandler handler)
         {
             client = handler.socketClient;
             logger = handler.logger;

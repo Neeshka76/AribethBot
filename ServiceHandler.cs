@@ -5,16 +5,11 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AribethBot
 {
-    public class CommandHandler
+    public class ServiceHandler
     {
         private readonly IServiceProvider services;
         public readonly DiscordSocketClient socketClient;
@@ -25,21 +20,19 @@ namespace AribethBot
         public readonly CommandService commands;
         public IConfiguration config;
         public readonly HttpClient httpClient;
-        public readonly TriggerHandler triggerHandler;
         public readonly DiscordLogger discordLogger;
 
-        public CommandHandler(IServiceProvider services)
+        public ServiceHandler(IServiceProvider services)
         {
             this.services = services;
             socketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
             socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
-            logger = this.services.GetRequiredService<ILogger<CommandHandler>>();
+            logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
-            httpClient = new HttpClient();
-            triggerHandler = this.services.GetRequiredService<TriggerHandler>();
             discordLogger = this.services.GetRequiredService<DiscordLogger>();
+            httpClient = new HttpClient();
             // process the InteractionCreated payloads to execute Interactions commands
             socketClient.InteractionCreated += HandleInteraction;
             // process the command execution results 
@@ -47,18 +40,6 @@ namespace AribethBot
             interactions.ContextCommandExecuted += ContextCommandExecuted;
             interactions.ComponentCommandExecuted += ComponentCommandExecuted;
             commands.CommandExecuted += Commands_CommandExecuted;
-        }
-
-        private bool HasRole(SocketGuildUser guildUser, string roleString)
-        {
-            foreach (SocketRole role in guildUser.Roles)
-            {
-                if (roleString == role.Name)
-                {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private async Task Commands_CommandExecuted(Optional<CommandInfo> command, ICommandContext context, Discord.Commands.IResult result)
@@ -77,7 +58,6 @@ namespace AribethBot
             if (result.IsSuccess)
             {
                 logger.LogInformation($"Command [{command.Value.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
-                return;
             }
         }
 

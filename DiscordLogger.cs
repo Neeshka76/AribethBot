@@ -6,18 +6,11 @@ using Discord.Rest;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AribethBot
 {
     public class DiscordLogger
     {
-        private readonly IServiceProvider services;
         public readonly DiscordSocketClient socketClient;
         public readonly InteractionService interactions;
 
@@ -25,7 +18,6 @@ namespace AribethBot
         public readonly ILogger logger;
         public readonly CommandService commands;
         public IConfiguration config;
-        public readonly HttpClient httpClient;
 
         public readonly string channelDeletedLog = "https://discord.com/channels/980745782594535484/1229046369013071912";
         public readonly string channelEditedLog = "https://discord.com/channels/980745782594535484/1229046463166939156";
@@ -40,17 +32,15 @@ namespace AribethBot
 
         public DiscordLogger(IServiceProvider services)
         {
-            this.services = services;
-            socketClient = this.services.GetRequiredService<DiscordSocketClient>();
-            interactions = this.services.GetRequiredService<InteractionService>();
-            socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
-            logger = this.services.GetRequiredService<ILogger<CommandHandler>>();
-            commands = this.services.GetRequiredService<CommandService>();
-            config = this.services.GetRequiredService<IConfiguration>();
-            httpClient = new HttpClient();
+            socketClient = services.GetRequiredService<DiscordSocketClient>();
+            interactions = services.GetRequiredService<InteractionService>();
+            socketConfig = services.GetRequiredService<DiscordSocketConfig>();
+            logger = services.GetRequiredService<ILogger<ServiceHandler>>();
+            commands = services.GetRequiredService<CommandService>();
+            config = services.GetRequiredService<IConfiguration>();
             // process the messages 
-            socketClient.MessageReceived += Client_MessageReceived;
-            socketClient.PresenceUpdated += SocketClient_PresenceUpdated;
+            //socketClient.MessageReceived += Client_MessageReceived;
+            //socketClient.PresenceUpdated += SocketClient_PresenceUpdated;
             socketClient.MessageUpdated += SocketClient_MessageUpdated;
             socketClient.MessageDeleted += SocketClient_MessageDeleted;
             socketClient.UserBanned += SocketClient_UserBanned;
@@ -141,9 +131,15 @@ namespace AribethBot
                 if (role.IsEveryone)
                     continue;
                 if (i == 0)
+                {
                     roles += role.Mention;
+                    i++;
+                }
                 else
+                {
                     roles += "; " + role.Mention;
+                    i++;
+                }
             }
 
             embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} ({ReturnDateTimeOffsetDifference(guildUser.JoinedAt)}) \n" +
@@ -291,8 +287,52 @@ namespace AribethBot
             embedBuilder.Description = $"{userMessage.Content}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
-            await channelDeleted.SendMessageAsync(embed: embedBuilder.Build());
+            if (userMessage.Attachments.Count != 0)
+                await ResendAttachmentsAsync(userMessage, embedBuilder, channelDeleted);
+            else
+                await channelDeleted.SendMessageAsync(embed: embedBuilder.Build());
         }
+
+        private async Task ResendAttachmentsAsync(IMessage originalMessage, EmbedBuilder embedBuilder, IMessageChannel targetChannel)
+        {
+            using HttpClient httpClient = new HttpClient();
+            List<FileStream> fileStreams = new List<FileStream>();
+
+            try
+            {
+                foreach (var attachment in originalMessage.Attachments)
+                {
+                    HttpResponseMessage response = await httpClient.GetAsync(attachment.Url);
+                    Stream stream = await response.Content.ReadAsStreamAsync();
+                    string filePath = Path.GetTempFileName();
+
+                    using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                    {
+                        await stream.CopyToAsync(fileStream);
+                    }
+
+                    fileStreams.Add(new FileStream(filePath, FileMode.Open, FileAccess.Read));
+                }
+                FileAttachment[] message = new FileAttachment[fileStreams.Count];
+                for (int i = 0; i < fileStreams.Count; i++)
+                {
+                    FileStream fileStream = fileStreams[i];
+                    IAttachment? attachment = originalMessage.Attachments.ElementAt(i);
+                    message[i] = new FileAttachment(fileStream, attachment.Filename);
+                }
+
+                await targetChannel.SendFilesAsync(message, embed: embedBuilder.Build());
+            }
+            finally
+            {
+                foreach (FileStream fileStream in fileStreams)
+                {
+                    fileStream.Close();
+                    File.Delete(fileStream.Name);
+                }
+            }
+        }
+        
 
         private async Task SocketClient_MessageUpdated(Cacheable<IMessage, ulong> message, SocketMessage updatedMessage, ISocketMessageChannel channel)
         {
@@ -330,8 +370,8 @@ namespace AribethBot
         {
             ulong[] ids = new ulong[2];
             string temp = link.Remove(0, "https://discord.com/channels/".Length);
-            ulong guildId = ulong.Parse(temp.Split("/", StringSplitOptions.None)[0]);
-            ulong channelId = ulong.Parse(temp.Split("/", StringSplitOptions.None)[1]);
+            ulong guildId = ulong.Parse(temp.Split("/")[0]);
+            ulong channelId = ulong.Parse(temp.Split("/")[1]);
             ids[0] = guildId;
             ids[1] = channelId;
             return ids;
