@@ -13,12 +13,10 @@ namespace AribethBot
     {
         public readonly DiscordSocketClient socketClient;
         public readonly InteractionService interactions;
-
         public readonly DiscordSocketConfig socketConfig;
         public readonly ILogger logger;
         public readonly CommandService commands;
         public IConfiguration config;
-
         public readonly string channelDeletedLog = "https://discord.com/channels/980745782594535484/1229046369013071912";
         public readonly string channelEditedLog = "https://discord.com/channels/980745782594535484/1229046463166939156";
         public readonly string channelEntryOutLog = "https://discord.com/channels/980745782594535484/1230084195729281084";
@@ -88,7 +86,6 @@ namespace AribethBot
                 embedBuilder.Color = Color.Blue;
                 await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
             }
-
             if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel != null && voiceStateBefore.VoiceChannel == voiceStateAfter.VoiceChannel)
             {
                 // Started a streaming
@@ -141,7 +138,6 @@ namespace AribethBot
                     i++;
                 }
             }
-
             embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} ({ReturnDateTimeOffsetDifference(guildUser.JoinedAt)}) \n" +
                                        $"**Roles : ** {roles}";
             embedBuilder.WithCurrentTimestamp();
@@ -162,38 +158,31 @@ namespace AribethBot
             int hours = endDate.Hour - actualStartDate.Hour;
             int minutes = endDate.Minute - actualStartDate.Minute;
             int seconds = endDate.Second - actualStartDate.Second;
-
             if (seconds < 0)
             {
                 minutes--;
                 seconds += 60;
             }
-
             if (minutes < 0)
             {
                 hours--;
                 minutes += 60;
             }
-
             if (hours < 0)
             {
                 days--;
                 hours += 24;
             }
-
             if (days < 0)
             {
                 months--;
                 days += DateTime.DaysInMonth(actualStartDate.Year, (actualStartDate.Month + months) % 12);
             }
-
             if (months < 0)
             {
                 years--;
                 months += 12;
             }
-
-
             string dateStrToReturn = "";
             if (years != 0)
                 dateStrToReturn += years + $" year{(years == 1 ? "" : "s")},";
@@ -211,7 +200,6 @@ namespace AribethBot
                 dateStrToReturn = dateStrToReturn.Substring(0, dateStrToReturn.Length - 1);
             if (dateStrToReturn.StartsWith(" "))
                 dateStrToReturn = dateStrToReturn.Substring(1);
-
             return dateStrToReturn;
         }
 
@@ -273,14 +261,11 @@ namespace AribethBot
             {
                 return;
             }
-
             if (oldMessage.Source != MessageSource.User)
             {
                 return;
             }
-
             SocketUser user = userMessage.Author;
-
             EmbedBuilder embedBuilder = new EmbedBuilder();
             embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
             embedBuilder.Title = $"Message deleted in <#{userMessage.Channel.Id}>";
@@ -297,42 +282,53 @@ namespace AribethBot
         {
             using HttpClient httpClient = new HttpClient();
             List<FileStream> fileStreams = new List<FileStream>();
-
-            try
+            string message = "";
+            int i = 0;
+            foreach (IAttachment? attachment in originalMessage.Attachments)
             {
-                foreach (var attachment in originalMessage.Attachments)
-                {
-                    HttpResponseMessage response = await httpClient.GetAsync(attachment.Url);
-                    Stream stream = await response.Content.ReadAsStreamAsync();
-                    string filePath = Path.GetTempFileName();
-
-                    using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
-                    {
-                        await stream.CopyToAsync(fileStream);
-                    }
-
-                    fileStreams.Add(new FileStream(filePath, FileMode.Open, FileAccess.Read));
-                }
-                FileAttachment[] message = new FileAttachment[fileStreams.Count];
-                for (int i = 0; i < fileStreams.Count; i++)
-                {
-                    FileStream fileStream = fileStreams[i];
-                    IAttachment? attachment = originalMessage.Attachments.ElementAt(i);
-                    message[i] = new FileAttachment(fileStream, attachment.Filename);
-                }
-
-                await targetChannel.SendFilesAsync(message, embed: embedBuilder.Build());
+                i++;
+                message += attachment.Url;
+                if (i != originalMessage.Attachments.Count)
+                    message += "\n";
             }
-            finally
-            {
-                foreach (FileStream fileStream in fileStreams)
-                {
-                    fileStream.Close();
-                    File.Delete(fileStream.Name);
-                }
-            }
+            await targetChannel.SendMessageAsync(text: message, embed: embedBuilder.Build());
         }
-        
+
+        //private async Task ResendAttachmentsAsync(IMessage originalMessage, EmbedBuilder embedBuilder, IMessageChannel targetChannel)
+        //{
+        //    using HttpClient httpClient = new HttpClient();
+        //    List<FileStream> fileStreams = new List<FileStream>();
+        //    try
+        //    {
+        //        foreach (IAttachment? attachment in originalMessage.Attachments)
+        //        {
+        //            HttpResponseMessage response = await httpClient.GetAsync(attachment.Url);
+        //            Stream stream = await response.Content.ReadAsStreamAsync();
+        //            string filePath = Path.GetTempFileName();
+        //            using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+        //            {
+        //                await stream.CopyToAsync(fileStream);
+        //            }
+        //            fileStreams.Add(new FileStream(filePath, FileMode.Open, FileAccess.Read));
+        //        }
+        //        FileAttachment[] message = new FileAttachment[fileStreams.Count];
+        //        for (int i = 0; i < fileStreams.Count; i++)
+        //        {
+        //            FileStream fileStream = fileStreams[i];
+        //            IAttachment? attachment = originalMessage.Attachments.ElementAt(i);
+        //            message[i] = new FileAttachment(fileStream, attachment.Filename);
+        //        }
+        //        await targetChannel.SendFilesAsync(message, embed: embedBuilder.Build());
+        //    }
+        //    finally
+        //    {
+        //        foreach (FileStream fileStream in fileStreams)
+        //        {
+        //            fileStream.Close();
+        //            File.Delete(fileStream.Name);
+        //        }
+        //    }
+        //}
 
         private async Task SocketClient_MessageUpdated(Cacheable<IMessage, ulong> message, SocketMessage updatedMessage, ISocketMessageChannel channel)
         {
@@ -344,7 +340,6 @@ namespace AribethBot
             {
                 return;
             }
-
             if (oldMessage.Source != MessageSource.User)
             {
                 return;
@@ -353,9 +348,7 @@ namespace AribethBot
             // Ensure that the message isn't the same (cause by embedded)
             if (updatedMessage.Content == userMessage.Content)
                 return;
-
             SocketUser user = userMessage.Author;
-
             EmbedBuilder embedBuilder = new EmbedBuilder();
             embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
             embedBuilder.Title = $"Message updated in <#{userMessage.Channel.Id}>";
@@ -384,12 +377,10 @@ namespace AribethBot
             {
                 return;
             }
-
             if (message.Source != MessageSource.User)
             {
                 return;
             }
-
             await Task.CompletedTask;
         }
 

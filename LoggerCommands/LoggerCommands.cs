@@ -23,6 +23,7 @@ namespace AribethBot
             "jujutsu kaisen",
             "jjk"
         ];
+
         public LoggerCommands(DiscordSocketClient client, SocketUserMessage message, SocketGuildUser user)
         {
             this.client = client;
@@ -34,13 +35,13 @@ namespace AribethBot
                 if (string.IsNullOrEmpty(selection)) continue;
                 _ = RunResponse(selection);
             }
-
         }
 
         private async Task NoCommands()
         {
             await Task.CompletedTask;
         }
+
         private async Task RunResponse(string selection)
         {
             switch (selection)
@@ -54,7 +55,6 @@ namespace AribethBot
                 default:
                     await NoCommands();
                     break;
-
             }
             await Task.CompletedTask;
         }
@@ -81,6 +81,5 @@ namespace AribethBot
             }
             return "";
         }
-
     }
 }

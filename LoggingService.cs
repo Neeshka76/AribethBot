@@ -1,13 +1,7 @@
 ﻿using Discord;
 using Discord.Interactions;
-using Discord.Rest;
 using Discord.Commands;
 using Discord.WebSocket;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -61,6 +55,7 @@ namespace AribethBot
             await client.Rest.DeleteAllGlobalCommandsAsync();
             return Task.CompletedTask;
         }
+
         private async Task<Task> PurgeLocalCommands()
         {
             IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
@@ -84,6 +79,7 @@ namespace AribethBot
             }
             return Task.CompletedTask;
         }
+
         private async Task<Task> ConfigureGlobalCommands()
         {
             logger.LogInformation($"Adding Global Commands");
@@ -98,35 +94,35 @@ namespace AribethBot
             switch (msg.Severity.ToString())
             {
                 case "Critical":
-                    {
-                        logger.LogCritical(logText);
-                        break;
-                    }
+                {
+                    logger.LogCritical(logText);
+                    break;
+                }
                 case "Warning":
-                    {
-                        logger.LogWarning(logText);
-                        break;
-                    }
+                {
+                    logger.LogWarning(logText);
+                    break;
+                }
                 case "Info":
-                    {
-                        logger.LogInformation(logText);
-                        break;
-                    }
+                {
+                    logger.LogInformation(logText);
+                    break;
+                }
                 case "Verbose":
-                    {
-                        logger.LogInformation(logText);
-                        break;
-                    }
+                {
+                    logger.LogInformation(logText);
+                    break;
+                }
                 case "Debug":
-                    {
-                        logger.LogDebug(logText);
-                        break;
-                    }
+                {
+                    logger.LogDebug(logText);
+                    break;
+                }
                 case "Error":
-                    {
-                        logger.LogError(logText);
-                        break;
-                    }
+                {
+                    logger.LogError(logText);
+                    break;
+                }
             }
             return Task.CompletedTask;
         }
@@ -139,6 +135,5 @@ namespace AribethBot
                 return false;
 #endif
         }
-
     }
 }

@@ -1,16 +1,7 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net;
-using System.ComponentModel.Design;
 
 namespace AribethBot
 {
@@ -24,9 +15,9 @@ namespace AribethBot
         // constructor injection is also a valid way to access the dependencies
         public MessageCommands(ServiceHandler handler)
         {
-            socketClient = handler.socketClient;
-            logger = handler.logger;
-            httpClient = handler.httpClient;
+            socketClient = handler.SocketClient;
+            logger = handler.Logger;
+            httpClient = handler.HttpClient;
         }
 
         //[RequireUserPermission(GuildPermission.ManageMessages)]
@@ -36,9 +27,8 @@ namespace AribethBot
         public async Task PurgeAsync()
         {
             await RespondAsync($"Executing command in {Context.Channel.Name}", ephemeral: true);
-
             IEnumerable<IMessage> messages = await Context.Channel.GetMessagesAsync(100).FlattenAsync();
-            if(messages.Count() <= 0)
+            if (messages.Count() <= 0)
             {
                 await Task.CompletedTask;
                 return;
@@ -62,7 +52,7 @@ namespace AribethBot
             {
                 logger.LogWarning($"Bots cannot bulk delete messages older than 2 weeks.");
             }
-            if(messagesBefore.Count == messages.Count())
+            if (messagesBefore.Count == messages.Count())
             {
                 await Task.CompletedTask;
                 return;
@@ -81,6 +71,7 @@ namespace AribethBot
                 }
             }
         }
+
         //[RequireUserPermission(GuildPermission.ManageMessages)]
         //[RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireOwner()]
@@ -154,9 +145,7 @@ namespace AribethBot
         {
             if (!Directory.Exists(destinationFolder))
                 Directory.CreateDirectory(destinationFolder);
-
             string path = Path.Combine(destinationFolder, destinationFileName);
-
             using (FileStream outputFileStream = new FileStream(path, FileMode.Create))
             {
                 await fileStream.CopyToAsync(outputFileStream);

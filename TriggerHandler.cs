@@ -4,50 +4,35 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AribethBot
 {
     public class TriggerHandler
     {
         private readonly IServiceProvider services;
-        public readonly DiscordSocketClient socketClient;
-        public readonly InteractionService interactions;
-
-        public readonly DiscordSocketConfig socketConfig;
-        public readonly ILogger logger;
-        public readonly CommandService commands;
-        public IConfiguration config;
-        public readonly HttpClient httpClient;
+        private readonly DiscordSocketClient socketClient;
+        private readonly InteractionService interactions;
+        private readonly IConfiguration config;
 
         public TriggerHandler(IServiceProvider services)
         {
             this.services = services;
             socketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
-            socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
-            logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
-            commands = this.services.GetRequiredService<CommandService>();
             config = this.services.GetRequiredService<IConfiguration>();
-            httpClient = new HttpClient();
             // process the InteractionCreated payloads to execute Interactions commands
             socketClient.InteractionCreated += HandleInteraction;
             // process the messages 
             socketClient.MessageReceived += Client_MessageReceived;
             socketClient.PresenceUpdated += SocketClient_PresenceUpdated;
         }
+
         private async Task HandleInteraction(SocketInteraction arg)
         {
             try
             {
                 // create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
-                var ctx = new SocketInteractionContext(socketClient, arg);
+                SocketInteractionContext ctx = new SocketInteractionContext(socketClient, arg);
                 await interactions.ExecuteCommandAsync(ctx, services);
             }
             catch (Exception ex)
@@ -69,7 +54,6 @@ namespace AribethBot
             {
                 return;
             }
-
             if (message.Source != MessageSource.User)
             {
                 return;
@@ -79,7 +63,7 @@ namespace AribethBot
             int argPos = 0;
 
             // get prefix from the configuration file
-            char prefix = Char.Parse(config["Prefix"]);
+            char prefix = char.Parse(config["Prefix"]);
 
             // determine if the message has a valid prefix, and adjust argPos based on prefix
             if (!(message.HasMentionPrefix(socketClient.CurrentUser, ref argPos) || message.HasCharPrefix(prefix, ref argPos)))

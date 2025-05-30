@@ -1,16 +1,7 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net;
-using System.ComponentModel.Design;
 
 namespace AribethBot
 {
@@ -24,9 +15,9 @@ namespace AribethBot
         // constructor injection is also a valid way to access the dependencies
         public ServerCommands(ServiceHandler handler)
         {
-            client = handler.socketClient;
-            logger = handler.logger;
-            httpClient = handler.httpClient;
+            client = handler.SocketClient;
+            logger = handler.Logger;
+            httpClient = handler.HttpClient;
         }
 
         [SlashCommand("serverstats", "Send stats about the server")]
@@ -45,7 +36,6 @@ namespace AribethBot
             embedBuilder.Description = $"Stats of {serverName}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
-
             EmbedFieldBuilder ownerFieldBuilder = new EmbedFieldBuilder();
             ownerFieldBuilder.Name = "Owner";
             ownerFieldBuilder.Value = $"Name : {Context.Guild.Owner.Mention}\n" +
@@ -60,34 +50,34 @@ namespace AribethBot
                     switch (activity)
                     {
                         case SpotifyGame spotifyGame:
-                            {
-                                ownerFieldBuilder.Value += $"\n" +
-                                           $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
-                            }
+                        {
+                            ownerFieldBuilder.Value += $"\n" +
+                                                       $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
+                        }
                             break;
                         case CustomStatusGame customStatusGame:
-                            {
-                                ownerFieldBuilder.Value += $"\n" +
-                                           $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
-                            }
+                        {
+                            ownerFieldBuilder.Value += $"\n" +
+                                                       $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
+                        }
                             break;
                         case RichGame richGame:
-                            {
-                                ownerFieldBuilder.Value += $"\n" +
-                                           $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
-                            }
+                        {
+                            ownerFieldBuilder.Value += $"\n" +
+                                                       $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
+                        }
                             break;
                         case StreamingGame streamingGame:
-                            {
-                                ownerFieldBuilder.Value += $"\n" +
-                                           $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
-                            }
+                        {
+                            ownerFieldBuilder.Value += $"\n" +
+                                                       $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
+                        }
                             break;
                         case Game game:
-                            {
-                                ownerFieldBuilder.Value += $"\n" +
-                                           $"- **{game.Type}** : {game.Name}";
-                            }
+                        {
+                            ownerFieldBuilder.Value += $"\n" +
+                                                       $"- **{game.Type}** : {game.Name}";
+                        }
                             break;
                     }
                 }
@@ -116,9 +106,9 @@ namespace AribethBot
             EmbedFieldBuilder roleStatsBuilder = new EmbedFieldBuilder();
             roleStatsBuilder.Name = "Roles";
             roleStatsBuilder.Value = $"Number of Roles : {Context.Guild.Roles.Count}\n" +
-                                      $"Highest Role : {HighestRole(Context.Guild)}\n" +
-                                      $"Most popular Role : {MostPopularMemberRole(Context.Guild)}\n" +
-                                      $"Roles and numbers of members (***Mentionable***): \n";
+                                     $"Highest Role : {HighestRole(Context.Guild)}\n" +
+                                     $"Most popular Role : {MostPopularMemberRole(Context.Guild)}\n" +
+                                     $"Roles and numbers of members (***Mentionable***): \n";
             foreach (SocketRole socketRole in Context.Guild.Roles.OrderByDescending(x => x.Position))
             {
                 if (socketRole.IsEveryone) continue;
@@ -172,6 +162,7 @@ namespace AribethBot
             }
             return roleReturned;
         }
+
         private SocketRole MostPopularMemberRole(SocketGuild socketGuild)
         {
             int roleNbMembers = 0;
@@ -188,6 +179,7 @@ namespace AribethBot
             }
             return roleReturned;
         }
+
         private int NbBots(SocketGuild socketGuild)
         {
             int nbBots = 0;
@@ -219,55 +211,54 @@ namespace AribethBot
             embedBuilder.Description = $"Stats of {user.Mention}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
-
             EmbedFieldBuilder userFieldBuilder = new EmbedFieldBuilder();
             userFieldBuilder.Name = "User";
             userFieldBuilder.Value = $"Name : {user.Username}\n" +
-                                      $"Account created at : {user.CreatedAt}\n" +
-                                      $"Account joined at : {user.JoinedAt}";
+                                     $"Account created at : {user.CreatedAt}\n" +
+                                     $"Account joined at : {user.JoinedAt}";
             if (user.Activities.Count > 0)
             {
                 userFieldBuilder.Value += $"\n" +
-                                           $"Activity :";
+                                          $"Activity :";
                 foreach (IActivity activity in user.Activities)
                 {
                     switch (activity)
                     {
                         case SpotifyGame spotifyGame:
-                            {
-                                userFieldBuilder.Value += $"\n" +
-                                           $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
-                            }
+                        {
+                            userFieldBuilder.Value += $"\n" +
+                                                      $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
+                        }
                             break;
                         case CustomStatusGame customStatusGame:
-                            {
-                                userFieldBuilder.Value += $"\n" +
-                                           $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
-                            }
+                        {
+                            userFieldBuilder.Value += $"\n" +
+                                                      $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
+                        }
                             break;
                         case RichGame richGame:
-                            {
-                                userFieldBuilder.Value += $"\n" +
-                                           $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
-                            }
+                        {
+                            userFieldBuilder.Value += $"\n" +
+                                                      $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
+                        }
                             break;
                         case StreamingGame streamingGame:
-                            {
-                                userFieldBuilder.Value += $"\n" +
-                                           $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
-                            }
+                        {
+                            userFieldBuilder.Value += $"\n" +
+                                                      $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
+                        }
                             break;
                         case Game game:
-                            {
-                                userFieldBuilder.Value += $"\n" +
-                                           $"- **{game.Type}** : {game.Name}";
-                            }
+                        {
+                            userFieldBuilder.Value += $"\n" +
+                                                      $"- **{game.Type}** : {game.Name}";
+                        }
                             break;
                     }
                 }
                 userFieldBuilder.Value += $"\n" +
-                                           $"Roles ({user.Roles.Count}) :" +
-                                           $"\n";
+                                          $"Roles ({user.Roles.Count}) :" +
+                                          $"\n";
                 foreach (SocketRole socketRole in user.Roles.OrderByDescending(x => x.Position))
                 {
                     if (socketRole.IsEveryone) continue;
@@ -343,7 +334,6 @@ namespace AribethBot
                 ulong roleNomad = 1000461086648176802;
                 ulong roleBetaPCVR = 980767452487106601;
                 ulong roleBetaNomad = 1189150798060462121;
-
                 foreach (SocketRole role in (user as SocketGuildUser).Roles)
                 {
                     // PCVR
@@ -367,7 +357,6 @@ namespace AribethBot
                         hasBetaNomad = true;
                     }
                     else continue;
-
                     if (hasPCVR && !hasBetaPCVR)
                     {
                         await user.AddRoleAsync(roleBetaPCVR);
@@ -390,7 +379,5 @@ namespace AribethBot
                 i++;
             }
         }
-
-
     }
 }

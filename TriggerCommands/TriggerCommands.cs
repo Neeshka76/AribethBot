@@ -1,15 +1,5 @@
 ﻿using Discord;
-using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AribethBot
 {
@@ -23,6 +13,7 @@ namespace AribethBot
             "jujutsu kaisen",
             "jjk"
         ];
+
         public TriggerCommands(DiscordSocketClient client, SocketUserMessage message, SocketGuildUser user)
         {
             this.client = client;
@@ -34,13 +25,13 @@ namespace AribethBot
                 if (string.IsNullOrEmpty(selection)) continue;
                 _ = RunResponse(selection);
             }
-
         }
 
         private async Task NoCommands()
         {
             await Task.CompletedTask;
         }
+
         private async Task RunResponse(string selection)
         {
             switch (selection)
@@ -54,7 +45,6 @@ namespace AribethBot
                 default:
                     await NoCommands();
                     break;
-
             }
             await Task.CompletedTask;
         }
@@ -81,6 +71,5 @@ namespace AribethBot
             }
             return "";
         }
-
     }
 }

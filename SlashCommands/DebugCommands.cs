@@ -1,16 +1,6 @@
-﻿using Discord;
-using Discord.Interactions;
+﻿using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net;
-using System.ComponentModel.Design;
 
 namespace AribethBot
 {
@@ -24,10 +14,11 @@ namespace AribethBot
         // constructor injection is also a valid way to access the dependencies
         public DebugCommands(ServiceHandler handler)
         {
-            client = handler.socketClient;
-            logger = handler.logger;
-            httpClient = handler.httpClient;
+            client = handler.SocketClient;
+            logger = handler.Logger;
+            httpClient = handler.HttpClient;
         }
+
         //[RequireUserPermission(GuildPermission.ManageMessages)]
         //[SlashCommand("debuglog", "Retrieve the last log of the bot")]
         public async Task DebugLog()
@@ -52,7 +43,6 @@ namespace AribethBot
                 {
                     await FollowupAsync($"Failed to grab the file {mostRecentLog}");
                 }
-
             }
         }
 
@@ -103,6 +93,5 @@ namespace AribethBot
                 }
             }
         }
-
     }
 }

@@ -1,23 +1,16 @@
-﻿using System;
-using Discord;
-using Discord.Net;
+﻿using Discord;
 using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
 using Microsoft.Extensions.DependencyInjection;
-using System.Threading;
 using Serilog;
 using Microsoft.Extensions.Logging;
-
 
 namespace AribethBot
 {
     public class EntryPoint
     {
-
         // setup our fields we assign later
         private IConfiguration config;
         private DiscordSocketClient socketClient;
@@ -30,11 +23,10 @@ namespace AribethBot
             {
                 logLevel = args[0];
             }
-
             Log.Logger = new LoggerConfiguration()
-                 .WriteTo.File("Logs/AribethLog.log", rollingInterval: RollingInterval.Day)
-                 .WriteTo.Console()
-                 .CreateLogger();
+                .WriteTo.File("Logs/AribethLog.log", rollingInterval: RollingInterval.Day)
+                .WriteTo.Console()
+                .CreateLogger();
             new EntryPoint().MainAsync().GetAwaiter().GetResult();
         }
 
@@ -49,8 +41,8 @@ namespace AribethBot
                 AlwaysDownloadUsers = true,
             };
             IConfigurationBuilder builder = new ConfigurationBuilder()
-                                            .SetBasePath(AppContext.BaseDirectory)
-                                            .AddJsonFile(path: "config.json");
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(path: "config.json");
             config = builder.Build();
             // call ConfigureServices to create the ServiceCollection/Provider for passing around the services
             using ServiceProvider services = ConfigureServices();
@@ -67,10 +59,8 @@ namespace AribethBot
 
             // we get the ServiceHandler class here and call the InitializeAsync method to start things up for the ServiceHandler service
             await services.GetRequiredService<ServiceHandler>().InitializeAsync();
-
             await Task.Delay(-1);
         }
-
 
         // this method handles the ServiceCollection creation/configuration, and builds out the service provider we can call on later
         private ServiceProvider ConfigureServices()
@@ -89,31 +79,30 @@ namespace AribethBot
                 .AddSingleton<LoggingService>()
                 .AddSingleton<DiscordLogger>()
                 .AddLogging(configure => configure.AddSerilog());
-
             if (!string.IsNullOrEmpty(logLevel))
             {
                 switch (logLevel.ToLower())
                 {
                     case "info":
-                        {
-                            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Information);
-                            break;
-                        }
+                    {
+                        services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Information);
+                        break;
+                    }
                     case "error":
-                        {
-                            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Error);
-                            break;
-                        }
+                    {
+                        services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Error);
+                        break;
+                    }
                     case "debug":
-                        {
-                            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Debug);
-                            break;
-                        }
+                    {
+                        services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Debug);
+                        break;
+                    }
                     default:
-                        {
-                            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Error);
-                            break;
-                        }
+                    {
+                        services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Error);
+                        break;
+                    }
                 }
             }
             else

@@ -1,16 +1,6 @@
-﻿using Discord;
-using Discord.Interactions;
+﻿using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net;
-using System.ComponentModel.Design;
 
 namespace AribethBot
 {
@@ -24,10 +14,11 @@ namespace AribethBot
         // constructor injection is also a valid way to access the dependencies
         public MiscCommands(ServiceHandler handler)
         {
-            client = handler.socketClient;
-            logger = handler.logger;
-            httpClient = handler.httpClient;
+            client = handler.SocketClient;
+            logger = handler.Logger;
+            httpClient = handler.HttpClient;
         }
+
         public enum TimestampFormat
         {
             ShortTime,
@@ -56,13 +47,20 @@ namespace AribethBot
         // Timestamp command
         [SlashCommand("timestamp", "Give a discord timestamp")]
         public async Task UnixTimestamp([Summary("Year", "Year : between 1970 & 3000")] int year,
-            [Summary("Month", "Month : between 1 & 12")] int month,
-            [Summary("Day", "Day : between 1 & 31 (takes in account the month !)")] int day,
-            [Summary("Hour", "Hour : between 0 & 23")] int hour,
-            [Summary("Minute", "Day : between 0 & 59")] int minute,
-            [Summary("TimeZone", "TimeZone : values between -12 & 14 : for example CET is +1; CST is +8;")] int timeZone,
-            [Summary("DaylightSaving", "DaylightSaving : True between March and November/October, false for the rest of the year")] bool daylightSaving = false,
-            [Summary("Format", "Format : choose between multiple format ")] TimestampFormat timestampFormat = TimestampFormat.LongDateShortTime)
+            [Summary("Month", "Month : between 1 & 12")]
+            int month,
+            [Summary("Day", "Day : between 1 & 31 (takes in account the month !)")]
+            int day,
+            [Summary("Hour", "Hour : between 0 & 23")]
+            int hour,
+            [Summary("Minute", "Day : between 0 & 59")]
+            int minute,
+            [Summary("TimeZone", "TimeZone : values between -12 & 14 : for example CET is +1; CST is +8;")]
+            int timeZone,
+            [Summary("DaylightSaving", "DaylightSaving : True between March and November/October, false for the rest of the year")]
+            bool daylightSaving = false,
+            [Summary("Format", "Format : choose between multiple format ")]
+            TimestampFormat timestampFormat = TimestampFormat.LongDateShortTime)
         {
             bool error = ErrorInData(year, month, day, hour, minute, timeZone);
             string message;
@@ -142,7 +140,7 @@ namespace AribethBot
             }
             bool isLeapYear = IsLeapYear(year, month);
             if ((day > 31 || day < 1) ||
-               ((month % 2 == 0 && month <= 7 || month % 2 == 1 && month > 7) && day > 30))
+                ((month % 2 == 0 && month <= 7 || month % 2 == 1 && month > 7) && day > 30))
             {
                 typeOfError = TypeOfError.Day;
                 return true;
@@ -181,6 +179,5 @@ namespace AribethBot
                 return false;
             }
         }
-
     }
 }

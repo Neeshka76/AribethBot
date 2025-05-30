@@ -12,29 +12,24 @@ namespace AribethBot
     public class ServiceHandler
     {
         private readonly IServiceProvider services;
-        public readonly DiscordSocketClient socketClient;
-        public readonly InteractionService interactions;
-
-        public readonly DiscordSocketConfig socketConfig;
-        public readonly ILogger logger;
-        public readonly CommandService commands;
-        public IConfiguration config;
-        public readonly HttpClient httpClient;
-        public readonly DiscordLogger discordLogger;
+        public readonly DiscordSocketClient SocketClient;
+        private readonly InteractionService interactions;
+        public readonly ILogger Logger;
+        private readonly CommandService commands;
+        public IConfiguration Config;
+        public readonly HttpClient HttpClient;
 
         public ServiceHandler(IServiceProvider services)
         {
             this.services = services;
-            socketClient = this.services.GetRequiredService<DiscordSocketClient>();
+            SocketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
-            socketConfig = this.services.GetRequiredService<DiscordSocketConfig>();
-            logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
+            Logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
-            config = this.services.GetRequiredService<IConfiguration>();
-            discordLogger = this.services.GetRequiredService<DiscordLogger>();
-            httpClient = new HttpClient();
+            Config = this.services.GetRequiredService<IConfiguration>();
+            HttpClient = new HttpClient();
             // process the InteractionCreated payloads to execute Interactions commands
-            socketClient.InteractionCreated += HandleInteraction;
+            SocketClient.InteractionCreated += HandleInteraction;
             // process the command execution results 
             interactions.SlashCommandExecuted += SlashCommandExecuted;
             interactions.ContextCommandExecuted += ContextCommandExecuted;
@@ -47,17 +42,16 @@ namespace AribethBot
             // if a command isn't found, log that info to console and exit this method
             if (!command.IsSpecified)
             {
-                logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
                 // failure scenario, let's let the user know
                 await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
                 return;
             }
 
-
             // log success to the console and exit this method
             if (result.IsSuccess)
             {
-                logger.LogInformation($"Command [{command.Value.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{command.Value.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
             }
         }
 
@@ -72,7 +66,7 @@ namespace AribethBot
             try
             {
                 // create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
-                var ctx = new SocketInteractionContext(socketClient, arg);
+                var ctx = new SocketInteractionContext(SocketClient, arg);
                 await interactions.ExecuteCommandAsync(ctx, services);
             }
             catch (Exception ex)
@@ -111,11 +105,11 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }
@@ -144,11 +138,11 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }
@@ -177,11 +171,11 @@ namespace AribethBot
                     default:
                         break;
                 }*/
-                logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace AribethBot
+﻿namespace AribethBot
 {
     public class Cryptography
     {
@@ -62,6 +56,5 @@ namespace AribethBot
             char d = char.IsUpper(ch) ? 'A' : 'a';
             return (char)((((ch + key) - d) % 26) + d);
         }
-
     }
 }

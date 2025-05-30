@@ -1,11 +1,4 @@
-﻿using Discord;
-using Discord.Interactions;
-using Discord.WebSocket;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Discord.Interactions;
 
 namespace AribethBot
 {
@@ -23,8 +16,10 @@ namespace AribethBot
         // Encrypt command
         [SlashCommand("encrypt", "Encrypt a message")]
         public async Task Encrypt([Summary("Cipher", "Cipher to use for the encryption")] Cryptography.Cipher cipher,
-                                    [Summary("Shift", "Shift to use for the cipher (use number without decimals)")] int shift,
-                                    [Summary("MessageToEncrypt", "Message to encrypt with the cipher")] string messageToEncrypt)
+            [Summary("Shift", "Shift to use for the cipher (use number without decimals)")]
+            int shift,
+            [Summary("MessageToEncrypt", "Message to encrypt with the cipher")]
+            string messageToEncrypt)
         {
             string[] parameters =
             [
@@ -36,11 +31,14 @@ namespace AribethBot
             // Return the encrypted text
             await RespondAsync($"Your text encrypted with the **{cipher}** cipher with a shift of **{shift}**\n```{result}```");
         }
+
         // Decrypt command
         [SlashCommand("decrypt", "Decrypt a message")]
         public async Task Decrypt([Summary("Cipher", "Cipher to use for the decryption")] Cryptography.Cipher cipher,
-                                    [Summary("Shift", "Shift to use for the cipher (use number without decimals)")] int shift,
-                                    [Summary("MessageToDecrypt", "Message to decrypt with the cipher")] string messageToDecrypt)
+            [Summary("Shift", "Shift to use for the cipher (use number without decimals)")]
+            int shift,
+            [Summary("MessageToDecrypt", "Message to decrypt with the cipher")]
+            string messageToDecrypt)
         {
             string[] parameters =
             [
