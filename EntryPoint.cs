@@ -15,23 +15,19 @@ namespace AribethBot
         private IConfiguration config;
         private DiscordSocketClient socketClient;
         private DiscordSocketConfig socketConfig;
+        
         private static string logLevel;
 
-        public static void Main(string[] args)
+        static void Main(string[] args) => new EntryPoint().MainAsync(args.Length != 0 ? args[0] : "").GetAwaiter().GetResult();
+
+        private async Task MainAsync(string strLoglevel)
         {
-            if (args.Count() != 0)
-            {
-                logLevel = args[0];
-            }
+            logLevel = strLoglevel;
             Log.Logger = new LoggerConfiguration()
                 .WriteTo.File("Logs/AribethLog.log", rollingInterval: RollingInterval.Day)
                 .WriteTo.Console()
                 .CreateLogger();
-            new EntryPoint().MainAsync().GetAwaiter().GetResult();
-        }
-
-        public async Task MainAsync()
-        {
+            
             socketConfig = new DiscordSocketConfig
             {
                 MessageCacheSize = 100,
@@ -40,17 +36,18 @@ namespace AribethBot
                 LogGatewayIntentWarnings = false,
                 AlwaysDownloadUsers = true,
             };
+            
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
             config = builder.Build();
             // call ConfigureServices to create the ServiceCollection/Provider for passing around the services
-            using ServiceProvider services = ConfigureServices();
+            await using ServiceProvider services = ConfigureServices();
             // get the client and assign to client 
             // you get the services via GetRequiredService<T>
             socketClient = services.GetRequiredService<DiscordSocketClient>();
-            services.GetRequiredService<LoggingService>();
-            services.GetRequiredService<DiscordLogger>();
+            services.GetRequiredService<BotLoggingService>();
+            services.GetRequiredService<ServerLogger>();
             string? token = config["DiscordToken"];
 
             // this is where we get the Token value from the configuration file, and start the bot
@@ -58,7 +55,7 @@ namespace AribethBot
             await socketClient.StartAsync();
 
             // we get the ServiceHandler class here and call the InitializeAsync method to start things up for the ServiceHandler service
-            await services.GetRequiredService<ServiceHandler>().InitializeAsync();
+            await services.GetRequiredService<CommandsHandler>().InitializeAsync();
             await Task.Delay(-1);
         }
 
@@ -75,9 +72,9 @@ namespace AribethBot
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>()))
                 .AddSingleton<CommandService>()
-                .AddSingleton<ServiceHandler>()
-                .AddSingleton<LoggingService>()
-                .AddSingleton<DiscordLogger>()
+                .AddSingleton<CommandsHandler>()
+                .AddSingleton<BotLoggingService>()
+                .AddSingleton<ServerLogger>()
                 .AddLogging(configure => configure.AddSerilog());
             if (!string.IsNullOrEmpty(logLevel))
             {

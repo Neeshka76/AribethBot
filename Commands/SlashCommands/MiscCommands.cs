@@ -12,7 +12,7 @@ namespace AribethBot
         private readonly HttpClient httpClient;
 
         // constructor injection is also a valid way to access the dependencies
-        public MiscCommands(ServiceHandler handler)
+        public MiscCommands(CommandsHandler handler)
         {
             client = handler.SocketClient;
             logger = handler.Logger;

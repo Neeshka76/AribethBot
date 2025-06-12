@@ -7,14 +7,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AribethBot
 {
-    public class TriggerHandler
+    public class SpamTriggerHandler
     {
         private readonly IServiceProvider services;
         private readonly DiscordSocketClient socketClient;
         private readonly InteractionService interactions;
         private readonly IConfiguration config;
 
-        public TriggerHandler(IServiceProvider services)
+        public SpamTriggerHandler(IServiceProvider services)
         {
             this.services = services;
             socketClient = this.services.GetRequiredService<DiscordSocketClient>();
@@ -68,16 +68,10 @@ namespace AribethBot
             // determine if the message has a valid prefix, and adjust argPos based on prefix
             if (!(message.HasMentionPrefix(socketClient.CurrentUser, ref argPos) || message.HasCharPrefix(prefix, ref argPos)))
             {
-                SocketGuildUser guildUser = message.Author as SocketGuildUser;
-                TriggerCommands triggerCommands = new TriggerCommands(socketClient, message, guildUser);
                 // execute command if one is found that matches
                 return;
             }
             await Task.CompletedTask;
-            //SocketCommandContext context = new SocketCommandContext(socketClient, message);
-            //
-            //// execute command if one is found that matches
-            //await commands.ExecuteAsync(context, argPos, services);
         }
 
         private async Task SocketClient_PresenceUpdated(SocketUser user, SocketPresence presenceBefore, SocketPresence presenceAfter)
@@ -86,18 +80,6 @@ namespace AribethBot
             if (presenceAfter == null) return;
             SocketGuildUser guildUser = user as SocketGuildUser;
             if (guildUser == null) return;
-            //if (presenceBefore.Status != presenceAfter.Status && HasRole(guildUser, "Modder") && guildUser != guildUser.Guild.Owner)
-            //{
-            //    if (presenceAfter.Status == UserStatus.Online)
-            //    {
-            //        logger.LogInformation($"User [{user.Username}] have changed from {presenceBefore.Status} to {presenceAfter.Status}");
-            //        // Can convert SocketChannel to IMessageChannel
-            //        IMessageChannel channel = socketClient.GetChannel(1001946429725622434) as IMessageChannel;
-            //        string message = "";
-            //        message = $"Wake up {socketClient.GetGuild(980745782594535484).Owner.Mention} ! {user.Mention} is online ! ({user.ActiveClients.First()})";
-            //        await channel.SendMessageAsync(message);
-            //    }
-            //}
             await Task.CompletedTask;
         }
     }

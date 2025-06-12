@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AribethBot
 {
-    public class LoggingService
+    public class BotLoggingService
     {
         // declare the fields used later in this class
         private readonly ILogger logger;
@@ -15,12 +15,12 @@ namespace AribethBot
         private readonly CommandService commands;
         private readonly InteractionService interactCommands;
 
-        public LoggingService(IServiceProvider services)
+        public BotLoggingService(IServiceProvider services)
         {
             // get the services we need via DI, and assign the fields declared above to them
             client = services.GetRequiredService<DiscordSocketClient>();
             commands = services.GetRequiredService<CommandService>();
-            logger = services.GetRequiredService<ILogger<LoggingService>>();
+            logger = services.GetRequiredService<ILogger<BotLoggingService>>();
             interactCommands = services.GetRequiredService<InteractionService>();
             // hook into these events with the methods provided below
             client.Ready += OnReadyAsync;

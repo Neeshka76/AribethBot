@@ -10,10 +10,10 @@ namespace AribethBot
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
         private IConfiguration config;
-        private ServiceHandler handler;
+        private CommandsHandler handler;
 
         // constructor injection is also a valid way to access the dependecies
-        public BaSCommands(ServiceHandler handler)
+        public BaSCommands(CommandsHandler handler)
         {
             config = handler.Config;
             this.handler = handler;
@@ -33,7 +33,7 @@ namespace AribethBot
         [SlashCommand("editweaponcraftingtutorial", "Edit the link to the weapon crafting tutorial for B&S")]
         public async Task EditWeaponCrafting([Summary("URL", "URL for the command")] string url)
         {
-            string json = File.ReadAllText(AppContext.BaseDirectory + "config.json");
+            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             jsonObj["WeaponCraftingLink"] = url;
             //https://youtu.be/-yjZAnniklM

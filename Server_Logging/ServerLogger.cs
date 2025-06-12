@@ -9,43 +9,45 @@ using Microsoft.Extensions.Logging;
 
 namespace AribethBot
 {
-    public class DiscordLogger
+    public class ServerLogger
     {
-        public readonly DiscordSocketClient socketClient;
-        public readonly InteractionService interactions;
-        public readonly DiscordSocketConfig socketConfig;
-        public readonly ILogger logger;
-        public readonly CommandService commands;
-        public IConfiguration config;
-        public readonly string channelDeletedLog = "https://discord.com/channels/980745782594535484/1229046369013071912";
-        public readonly string channelEditedLog = "https://discord.com/channels/980745782594535484/1229046463166939156";
-        public readonly string channelEntryOutLog = "https://discord.com/channels/980745782594535484/1230084195729281084";
-        public readonly string channelBanLog = "https://discord.com/channels/980745782594535484/1229090230494302339";
-        public readonly string channelVoiceActivityLog = "https://discord.com/channels/980745782594535484/1229089477830639698";
-        SocketTextChannel channelEdited;
-        SocketTextChannel channelDeleted;
-        SocketTextChannel channelEntryOut;
-        SocketTextChannel channelBan;
-        SocketTextChannel channelVoiceActivity;
+        private readonly DiscordSocketClient socketClient;
+        public readonly InteractionService Interactions;
+        public readonly DiscordSocketConfig SocketConfig;
+        public readonly ILogger Logger;
+        public readonly CommandService Commands;
+        private IConfiguration Config;
+        private readonly string? channelDeletedLog;
+        private readonly string? channelEditedLog;
+        private readonly string? channelEntryOutLog;
+        private readonly string? channelBanLog;
+        private readonly string? channelVoiceActivityLog;
+        private SocketTextChannel channelEdited;
+        private SocketTextChannel channelDeleted;
+        private SocketTextChannel channelEntryOut;
+        private SocketTextChannel channelBan;
+        private SocketTextChannel channelVoiceActivity;
 
-        public DiscordLogger(IServiceProvider services)
+        public ServerLogger(IServiceProvider services)
         {
             socketClient = services.GetRequiredService<DiscordSocketClient>();
-            interactions = services.GetRequiredService<InteractionService>();
-            socketConfig = services.GetRequiredService<DiscordSocketConfig>();
-            logger = services.GetRequiredService<ILogger<ServiceHandler>>();
-            commands = services.GetRequiredService<CommandService>();
-            config = services.GetRequiredService<IConfiguration>();
+            Interactions = services.GetRequiredService<InteractionService>();
+            SocketConfig = services.GetRequiredService<DiscordSocketConfig>();
+            Logger = services.GetRequiredService<ILogger<CommandsHandler>>();
+            Commands = services.GetRequiredService<CommandService>();
+            Config = services.GetRequiredService<IConfiguration>();
+            channelDeletedLog = Config["channelDeletedLog"];
+            channelEditedLog = Config["channelEditedLog"];
+            channelEntryOutLog = Config["channelEntryOutLog"];
+            channelBanLog = Config["channelBanLog"];
+            channelVoiceActivityLog = Config["channelVoiceActivityLog"];
             // process the messages 
-            //socketClient.MessageReceived += Client_MessageReceived;
-            //socketClient.PresenceUpdated += SocketClient_PresenceUpdated;
             socketClient.MessageUpdated += SocketClient_MessageUpdated;
             socketClient.MessageDeleted += SocketClient_MessageDeleted;
             socketClient.UserBanned += SocketClient_UserBanned;
             socketClient.UserUnbanned += SocketClient_UserUnbanned;
             socketClient.UserJoined += SocketClient_UserJoined;
             socketClient.UserLeft += SocketClient_UserLeft;
-            //socketClient.UserUpdated += SocketClient_UserUpdated;
             socketClient.UserVoiceStateUpdated += SocketClient_UserVoiceStateUpdated;
         }
 
@@ -108,11 +110,6 @@ namespace AribethBot
             }
         }
 
-        //private Task SocketClient_UserUpdated(SocketUser arg1, SocketUser arg2)
-        //{
-        //    throw new NotImplementedException();
-        //}
-
         private async Task SocketClient_UserLeft(SocketGuild guild, SocketUser user)
         {
             ulong[] channelUserJoined = ReturnGuildAndChannelsIDs(channelEntryOutLog);
@@ -130,13 +127,12 @@ namespace AribethBot
                 if (i == 0)
                 {
                     roles += role.Mention;
-                    i++;
                 }
                 else
                 {
                     roles += "; " + role.Mention;
-                    i++;
                 }
+                i++;
             }
             embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} ({ReturnDateTimeOffsetDifference(guildUser.JoinedAt)}) \n" +
                                        $"**Roles : ** {roles}";
@@ -257,7 +253,7 @@ namespace AribethBot
             channelDeleted = socketClient.GetGuild(channelDeletedParse[0]).GetTextChannel(channelDeletedParse[1]);
             IMessage oldMessage = message.GetOrDownloadAsync().Result;
             // ensures we don't process system/other bot messages
-            if (!(oldMessage is SocketUserMessage userMessage))
+            if (oldMessage is not SocketUserMessage userMessage)
             {
                 return;
             }
@@ -281,7 +277,6 @@ namespace AribethBot
         private async Task ResendAttachmentsAsync(IMessage originalMessage, EmbedBuilder embedBuilder, IMessageChannel targetChannel)
         {
             using HttpClient httpClient = new HttpClient();
-            List<FileStream> fileStreams = new List<FileStream>();
             string message = "";
             int i = 0;
             foreach (IAttachment? attachment in originalMessage.Attachments)
@@ -294,49 +289,13 @@ namespace AribethBot
             await targetChannel.SendMessageAsync(text: message, embed: embedBuilder.Build());
         }
 
-        //private async Task ResendAttachmentsAsync(IMessage originalMessage, EmbedBuilder embedBuilder, IMessageChannel targetChannel)
-        //{
-        //    using HttpClient httpClient = new HttpClient();
-        //    List<FileStream> fileStreams = new List<FileStream>();
-        //    try
-        //    {
-        //        foreach (IAttachment? attachment in originalMessage.Attachments)
-        //        {
-        //            HttpResponseMessage response = await httpClient.GetAsync(attachment.Url);
-        //            Stream stream = await response.Content.ReadAsStreamAsync();
-        //            string filePath = Path.GetTempFileName();
-        //            using (FileStream fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
-        //            {
-        //                await stream.CopyToAsync(fileStream);
-        //            }
-        //            fileStreams.Add(new FileStream(filePath, FileMode.Open, FileAccess.Read));
-        //        }
-        //        FileAttachment[] message = new FileAttachment[fileStreams.Count];
-        //        for (int i = 0; i < fileStreams.Count; i++)
-        //        {
-        //            FileStream fileStream = fileStreams[i];
-        //            IAttachment? attachment = originalMessage.Attachments.ElementAt(i);
-        //            message[i] = new FileAttachment(fileStream, attachment.Filename);
-        //        }
-        //        await targetChannel.SendFilesAsync(message, embed: embedBuilder.Build());
-        //    }
-        //    finally
-        //    {
-        //        foreach (FileStream fileStream in fileStreams)
-        //        {
-        //            fileStream.Close();
-        //            File.Delete(fileStream.Name);
-        //        }
-        //    }
-        //}
-
         private async Task SocketClient_MessageUpdated(Cacheable<IMessage, ulong> message, SocketMessage updatedMessage, ISocketMessageChannel channel)
         {
             ulong[] channelEditedParse = ReturnGuildAndChannelsIDs(channelEditedLog);
             channelEdited = socketClient.GetGuild(channelEditedParse[0]).GetTextChannel(channelEditedParse[1]);
             IMessage oldMessage = message.GetOrDownloadAsync().Result;
             // ensures we don't process system/other bot messages
-            if (!(oldMessage is SocketUserMessage userMessage))
+            if (oldMessage is not SocketUserMessage userMessage)
             {
                 return;
             }
@@ -359,7 +318,7 @@ namespace AribethBot
             await channelEdited.SendMessageAsync(embed: embedBuilder.Build());
         }
 
-        private ulong[] ReturnGuildAndChannelsIDs(string link)
+        private ulong[] ReturnGuildAndChannelsIDs(string? link)
         {
             ulong[] ids = new ulong[2];
             string temp = link.Remove(0, "https://discord.com/channels/".Length);
@@ -368,41 +327,6 @@ namespace AribethBot
             ids[0] = guildId;
             ids[1] = channelId;
             return ids;
-        }
-
-        private async Task Client_MessageReceived(SocketMessage rawMessage)
-        {
-            // ensures we don't process system/other bot messages
-            if (!(rawMessage is SocketUserMessage message))
-            {
-                return;
-            }
-            if (message.Source != MessageSource.User)
-            {
-                return;
-            }
-            await Task.CompletedTask;
-        }
-
-        private async Task SocketClient_PresenceUpdated(SocketUser user, SocketPresence presenceBefore, SocketPresence presenceAfter)
-        {
-            if (presenceBefore == null) return;
-            if (presenceAfter == null) return;
-            SocketGuildUser guildUser = user as SocketGuildUser;
-            if (guildUser == null) return;
-            //if (presenceBefore.Status != presenceAfter.Status && HasRole(guildUser, "Modder") && guildUser != guildUser.Guild.Owner)
-            //{
-            //    if (presenceAfter.Status == UserStatus.Online)
-            //    {
-            //        logger.LogInformation($"User [{user.Username}] have changed from {presenceBefore.Status} to {presenceAfter.Status}");
-            //        // Can convert SocketChannel to IMessageChannel
-            //        IMessageChannel channel = socketClient.GetChannel(1001946429725622434) as IMessageChannel;
-            //        string message = "";
-            //        message = $"Wake up {socketClient.GetGuild(980745782594535484).Owner.Mention} ! {user.Mention} is online ! ({user.ActiveClients.First()})";
-            //        await channel.SendMessageAsync(message);
-            //    }
-            //}
-            await Task.CompletedTask;
         }
     }
 }
