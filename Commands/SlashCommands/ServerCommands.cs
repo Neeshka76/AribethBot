@@ -1,24 +1,59 @@
 ﻿using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace AribethBot
 {
     public class ServerCommands : InteractionModuleBase<SocketInteractionContext>
     {
+        
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private readonly DiscordSocketClient client;
-        private readonly ILogger logger;
-        private readonly HttpClient httpClient;
-
+        private IConfiguration config;
+        private ServiceHandler handler;
+        
         // constructor injection is also a valid way to access the dependencies
-        public ServerCommands(CommandsHandler handler)
+        public ServerCommands(ServiceHandler handler)
         {
-            client = handler.SocketClient;
-            logger = handler.Logger;
-            httpClient = handler.HttpClient;
+            config = handler.Config;
+            this.handler = handler;
         }
+        
+        [RequireOwner()]
+        [SlashCommand("editspamtriggernbmessages", "Edit the number of messages for spam detection")]
+        public async Task EditSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
+        {
+            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
+            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            jsonObj["nbMessagesSpamTrigger"] = nbMessages;
+            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
+            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            IConfigurationBuilder builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(path: "config.json");
+            config = builder.Build();
+            handler.Config = config;
+            await RespondAsync($"Number of messages for the SpamTrigger is updated !");
+        }
+        [RequireOwner()]
+        [SlashCommand("editspamtriggerintervaltime", "Edit the time interval for spam detection")]
+        public async Task EditSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
+        {
+            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
+            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            jsonObj["intervalTimeSpamTrigger"] = timeInterval.ToString();
+            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
+            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            IConfigurationBuilder builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(path: "config.json");
+            config = builder.Build();
+            handler.Config = config;
+            await RespondAsync($"Time interval for the SpamTrigger is updated !");
+        }
+        
 
         [SlashCommand("serverstats", "Send stats about the server")]
         public async Task ServerStats()

@@ -46,8 +46,10 @@ namespace AribethBot
             // get the client and assign to client 
             // you get the services via GetRequiredService<T>
             socketClient = services.GetRequiredService<DiscordSocketClient>();
+            // Must call this to activate them, need a better way to handle that
             services.GetRequiredService<BotLoggingService>();
             services.GetRequiredService<ServerLogger>();
+            services.GetRequiredService<SpamTriggerHandler>();
             string? token = config["DiscordToken"];
 
             // this is where we get the Token value from the configuration file, and start the bot
@@ -55,7 +57,7 @@ namespace AribethBot
             await socketClient.StartAsync();
 
             // we get the ServiceHandler class here and call the InitializeAsync method to start things up for the ServiceHandler service
-            await services.GetRequiredService<CommandsHandler>().InitializeAsync();
+            await services.GetRequiredService<ServiceHandler>().InitializeAsync();
             await Task.Delay(-1);
         }
 
@@ -72,9 +74,10 @@ namespace AribethBot
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>()))
                 .AddSingleton<CommandService>()
-                .AddSingleton<CommandsHandler>()
+                .AddSingleton<ServiceHandler>()
                 .AddSingleton<BotLoggingService>()
                 .AddSingleton<ServerLogger>()
+                .AddSingleton<SpamTriggerHandler>()
                 .AddLogging(configure => configure.AddSerilog());
             if (!string.IsNullOrEmpty(logLevel))
             {

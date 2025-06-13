@@ -7,16 +7,12 @@ namespace AribethBot
     public class DebugCommands : InteractionModuleBase<SocketInteractionContext>
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private readonly DiscordSocketClient client;
         private readonly ILogger logger;
-        private readonly HttpClient httpClient;
 
         // constructor injection is also a valid way to access the dependencies
-        public DebugCommands(CommandsHandler handler)
+        public DebugCommands(ServiceHandler handler)
         {
-            client = handler.SocketClient;
             logger = handler.Logger;
-            httpClient = handler.HttpClient;
         }
 
         //[RequireUserPermission(GuildPermission.ManageMessages)]
@@ -51,19 +47,15 @@ namespace AribethBot
             HashSet<string> listPath = Directory.EnumerateFiles(pathToFiles, "AribethLog*.log", SearchOption.TopDirectoryOnly).ToHashSet();
             string mostRecent = "";
             DateTime mostRecentDate = DateTime.MinValue;
-            if (listPath.Count > 0)
+            if (listPath.Count <= 0) return mostRecent;
+            mostRecent = listPath.First();
+            FileInfo fileInfo = new FileInfo(mostRecent);
+            mostRecentDate = fileInfo.LastWriteTime;
+            foreach (string path in listPath)
             {
-                mostRecent = listPath.First();
-                FileInfo fileInfo = new FileInfo(mostRecent);
-                mostRecentDate = fileInfo.LastWriteTime;
-                foreach (string path in listPath)
-                {
-                    if (TryGetMostRecent(path, mostRecentDate, out string outputRecent, out DateTime outputRecentDate))
-                    {
-                        mostRecent = outputRecent;
-                        mostRecentDate = outputRecentDate;
-                    }
-                }
+                if (!TryGetMostRecent(path, mostRecentDate, out string outputRecent, out DateTime outputRecentDate)) continue;
+                mostRecent = outputRecent;
+                mostRecentDate = outputRecentDate;
             }
             return mostRecent;
         }

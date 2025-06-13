@@ -6,17 +6,11 @@ namespace AribethBot
 {
     public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
     {
-        // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private readonly DiscordSocketClient client;
-        private readonly ILogger logger;
-        private readonly HttpClient httpClient;
 
         // constructor injection is also a valid way to access the dependencies
-        public MiscCommands(CommandsHandler handler)
+        public MiscCommands(ServiceHandler handler)
         {
-            client = handler.SocketClient;
-            logger = handler.Logger;
-            httpClient = handler.HttpClient;
+            
         }
 
         public enum TimestampFormat

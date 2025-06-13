@@ -9,7 +9,7 @@ using System.Reflection;
 
 namespace AribethBot
 {
-    public class CommandsHandler
+    public class ServiceHandler
     {
         private readonly IServiceProvider services;
         public readonly DiscordSocketClient SocketClient;
@@ -19,12 +19,12 @@ namespace AribethBot
         public IConfiguration Config;
         public readonly HttpClient HttpClient;
 
-        public CommandsHandler(IServiceProvider services)
+        public ServiceHandler(IServiceProvider services)
         {
             this.services = services;
             SocketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
-            Logger = this.services.GetRequiredService<ILogger<CommandsHandler>>();
+            Logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
             commands = this.services.GetRequiredService<CommandService>();
             Config = this.services.GetRequiredService<IConfiguration>();
             HttpClient = new HttpClient();

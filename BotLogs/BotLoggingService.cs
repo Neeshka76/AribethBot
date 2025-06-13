@@ -35,12 +35,12 @@ namespace AribethBot
             {
                 logger.LogInformation($"In Debug mode !");
                 //await PurgeGlobalCommands();
-                await ConfigureLocalCommands();
+                //await ConfigureLocalCommands();
             }
             else
             {
                 logger.LogInformation($"In Runtime mode !");
-                await PurgeLocalCommands();
+                //await PurgeLocalCommands();
                 await ConfigureGlobalCommands();
             }
             logger.LogInformation($"Connected as -> [{client.CurrentUser}] :)");
