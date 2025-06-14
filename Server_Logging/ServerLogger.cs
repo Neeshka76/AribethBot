@@ -146,16 +146,39 @@ public class ServerLogger
 
     private async Task SocketClient_UserUnbanned(SocketUser user, SocketGuild guild)
     {
+        // Delay to get the auditLogs of the unban
+        await Task.Delay(TimeSpan.FromSeconds(0.2));
         ulong[] channelUserBan = ReturnGuildAndChannelsIDs(channelBanLog);
         channelBan = socketClient.GetGuild(channelUserBan[0]).GetTextChannel(channelUserBan[1]);
-        RestBan restBan = await guild.GetBanAsync(user.Id);
+        // Read the audit log to get the responsible user (only displayed here)
+        IAuditLogEntry foundBanEntry = null;
+        IUser responsibleUser = null;
+        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(10, actionType: ActionType.Unban))
+        {
+            foreach (RestAuditLogEntry entry in batch)
+            {
+                if (entry.Action != ActionType.Unban) continue;
+                if (entry.Data is BanAuditLogData banData && banData.Target.Id == user.Id)
+                {
+                    foundBanEntry = entry;
+                    responsibleUser = foundBanEntry.User;
+                }
+                break;
+            }
+            if (foundBanEntry != null)
+                break;
+        }
         EmbedBuilder embedBuilder = new EmbedBuilder();
         embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
         embedBuilder.Title = $"Unban";
         embedBuilder.Description =
-            $"**Offender : **{user.Username} {user.Mention}"; /*\n" +
-            $"**Reason : ** {restBan.Reason}"; \n" +
-            $"**Responsible moderator : {restBan.}**";*/
+            $"**Offender : **{user.Username} {user.Mention}";
+        if (responsibleUser != null)
+        {
+            embedBuilder.Description +=
+                $"\n" +
+                $"**Responsible moderator : **{responsibleUser.Username} {responsibleUser.Mention}";
+        }
         embedBuilder.WithCurrentTimestamp();
         embedBuilder.Color = Color.Blue;
         await channelBan.SendMessageAsync(embed: embedBuilder.Build());
@@ -163,16 +186,42 @@ public class ServerLogger
 
     private async Task SocketClient_UserBanned(SocketUser user, SocketGuild guild)
     {
+        // Delay to get the auditLogs of the ban
+        await Task.Delay(TimeSpan.FromSeconds(0.2));
         ulong[] channelUserBan = ReturnGuildAndChannelsIDs(channelBanLog);
         channelBan = socketClient.GetGuild(channelUserBan[0]).GetTextChannel(channelUserBan[1]);
+        // Only needed to get the reason of the ban
         RestBan restBan = await guild.GetBanAsync(user.Id);
+        // Read the audit log to get the responsible user (only displayed here)
+        IAuditLogEntry foundBanEntry = null;
+        IUser responsibleUser = null;
+        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(10, actionType: ActionType.Ban))
+        {
+            foreach (RestAuditLogEntry entry in batch)
+            {
+                if (entry.Action != ActionType.Ban) continue;
+                if (entry.Data is BanAuditLogData banData && banData.Target.Id == user.Id)
+                {
+                    foundBanEntry = entry;
+                    responsibleUser = foundBanEntry.User;
+                }
+                break;
+            }
+            if (foundBanEntry != null)
+                break;
+        }
         EmbedBuilder embedBuilder = new EmbedBuilder();
         embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
         embedBuilder.Title = $"Ban";
         embedBuilder.Description =
             $"**Offender : **{user.Username} {user.Mention}\n" +
-            $"**Reason : ** {restBan.Reason}"; /* \n" +
-            $"**Responsible moderator : {restBan.}**";*/
+            $"**Reason : **{restBan.Reason}";
+        if (responsibleUser != null)
+        {
+            embedBuilder.Description +=
+                $"\n" +
+                $"**Responsible moderator : **{responsibleUser.Username} {responsibleUser.Mention}";
+        }
         embedBuilder.WithCurrentTimestamp();
         embedBuilder.Color = Color.Red;
         await channelBan.SendMessageAsync(embed: embedBuilder.Build());
