@@ -153,7 +153,7 @@ public class ServerLogger
         // Read the audit log to get the responsible user (only displayed here)
         IAuditLogEntry foundBanEntry = null;
         IUser responsibleUser = null;
-        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(10, actionType: ActionType.Unban))
+        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(1, actionType: ActionType.Unban))
         {
             foreach (RestAuditLogEntry entry in batch)
             {
@@ -195,7 +195,7 @@ public class ServerLogger
         // Read the audit log to get the responsible user (only displayed here)
         IAuditLogEntry foundBanEntry = null;
         IUser responsibleUser = null;
-        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(10, actionType: ActionType.Ban))
+        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(1, actionType: ActionType.Ban))
         {
             foreach (RestAuditLogEntry entry in batch)
             {
