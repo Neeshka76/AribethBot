@@ -22,7 +22,7 @@ namespace AribethBot
         }
         
         [RequireOwner()]
-        [SlashCommand("editclassicspamtriggernbmessages", "Edit the number of messages for classic spam detection")]
+        [SlashCommand("classicspamtrignbmsg", "Edit the number of messages for classic spam detection")]
         public async Task EditClassicSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
@@ -39,7 +39,7 @@ namespace AribethBot
             await RespondAsync($"Number of messages for the ClassicSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
         [RequireOwner()]
-        [SlashCommand("editclassicspamtriggerintervaltime", "Edit the time interval for classic spam detection")]
+        [SlashCommand("classicspamtriginttime", "Edit the time interval for classic spam detection")]
         public async Task EditClassicSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
@@ -57,7 +57,7 @@ namespace AribethBot
         }
         
         [RequireOwner()]
-        [SlashCommand("editbotspamtriggernbmessages", "Edit the number of messages for bot spam detection")]
+        [SlashCommand("botspamtrignbmsg", "Edit the number of messages for bot spam detection")]
         public async Task EditBotSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
@@ -74,7 +74,7 @@ namespace AribethBot
             await RespondAsync($"Number of messages for the BotSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
         [RequireOwner()]
-        [SlashCommand("editbotspamtriggerintervaltime", "Edit the time interval for bot spam detection")]
+        [SlashCommand("botspamtriginttime", "Edit the time interval for bot spam detection")]
         public async Task EditBotSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
