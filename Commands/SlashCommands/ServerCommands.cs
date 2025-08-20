@@ -22,11 +22,12 @@ namespace AribethBot
         }
         
         [RequireOwner()]
-        [SlashCommand("editspamtriggernbmessages", "Edit the number of messages for spam detection")]
-        public async Task EditSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
+        [SlashCommand("editclassicspamtriggernbmessages", "Edit the number of messages for classic spam detection")]
+        public async Task EditClassicSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            string oldValue = jsonObj["nbMessagesSpamTriggerClassic"];
             jsonObj["nbMessagesSpamTrigger"] = nbMessages;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
@@ -35,14 +36,15 @@ namespace AribethBot
                 .AddJsonFile(path: "config.json");
             config = builder.Build();
             handler.Config = config;
-            await RespondAsync($"Number of messages for the SpamTrigger is updated !");
+            await RespondAsync($"Number of messages for the ClassicSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
         [RequireOwner()]
-        [SlashCommand("editspamtriggerintervaltime", "Edit the time interval for spam detection")]
-        public async Task EditSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
+        [SlashCommand("editclassicspamtriggerintervaltime", "Edit the time interval for classic spam detection")]
+        public async Task EditClassicSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
         {
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            string oldValue = jsonObj["intervalTimeSpamTriggerClassic"];
             jsonObj["intervalTimeSpamTrigger"] = timeInterval.ToString();
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
@@ -51,7 +53,42 @@ namespace AribethBot
                 .AddJsonFile(path: "config.json");
             config = builder.Build();
             handler.Config = config;
-            await RespondAsync($"Time interval for the SpamTrigger is updated !");
+            await RespondAsync($"Time interval for the ClassicSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
+        }
+        
+        [RequireOwner()]
+        [SlashCommand("editbotspamtriggernbmessages", "Edit the number of messages for bot spam detection")]
+        public async Task EditBotSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
+        {
+            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
+            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            string oldValue = jsonObj["nbMessagesSpamTriggerBot"];
+            jsonObj["nbMessagesSpamTrigger"] = nbMessages;
+            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
+            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            IConfigurationBuilder builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(path: "config.json");
+            config = builder.Build();
+            handler.Config = config;
+            await RespondAsync($"Number of messages for the BotSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
+        }
+        [RequireOwner()]
+        [SlashCommand("editbotspamtriggerintervaltime", "Edit the time interval for bot spam detection")]
+        public async Task EditBotSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
+        {
+            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
+            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+            string oldValue = jsonObj["intervalTimeSpamTriggerBot"];
+            jsonObj["intervalTimeSpamTrigger"] = timeInterval.ToString();
+            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
+            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            IConfigurationBuilder builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(path: "config.json");
+            config = builder.Build();
+            handler.Config = config;
+            await RespondAsync($"Time interval for the BotSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
         }
         
 
