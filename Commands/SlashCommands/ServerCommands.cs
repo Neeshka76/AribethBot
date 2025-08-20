@@ -28,7 +28,7 @@ namespace AribethBot
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             string oldValue = jsonObj["nbMessagesSpamTriggerClassic"];
-            jsonObj["nbMessagesSpamTrigger"] = nbMessages;
+            jsonObj["nbMessagesSpamTriggerClassic"] = nbMessages;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
@@ -45,7 +45,7 @@ namespace AribethBot
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             string oldValue = jsonObj["intervalTimeSpamTriggerClassic"];
-            jsonObj["intervalTimeSpamTrigger"] = timeInterval.ToString();
+            jsonObj["intervalTimeSpamTriggerClassic"] = timeInterval.ToString();
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
@@ -63,7 +63,7 @@ namespace AribethBot
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             string oldValue = jsonObj["nbMessagesSpamTriggerBot"];
-            jsonObj["nbMessagesSpamTrigger"] = nbMessages;
+            jsonObj["nbMessagesSpamTriggerBot"] = nbMessages;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
@@ -80,7 +80,7 @@ namespace AribethBot
             string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             string oldValue = jsonObj["intervalTimeSpamTriggerBot"];
-            jsonObj["intervalTimeSpamTrigger"] = timeInterval.ToString();
+            jsonObj["intervalTimeSpamTriggerBot"] = timeInterval.ToString();
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
             File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
