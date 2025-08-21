@@ -68,22 +68,18 @@ namespace AribethBot
                 mostRecentDate = DateTime.MinValue;
                 return false;
             }
-            else
+
+            FileInfo fileInfo = new FileInfo(filepath);
+            if (fileInfo.LastWriteTime > dateTime)
             {
-                FileInfo fileInfo = new FileInfo(filepath);
-                if (fileInfo.LastWriteTime > dateTime)
-                {
-                    mostRecent = filepath;
-                    mostRecentDate = fileInfo.LastWriteTime;
-                    return true;
-                }
-                else
-                {
-                    mostRecent = "";
-                    mostRecentDate = DateTime.MinValue;
-                    return false;
-                }
+                mostRecent = filepath;
+                mostRecentDate = fileInfo.LastWriteTime;
+                return true;
             }
+
+            mostRecent = "";
+            mostRecentDate = DateTime.MinValue;
+            return false;
         }
     }
 }

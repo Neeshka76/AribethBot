@@ -27,8 +27,8 @@ namespace AribethBot
         public async Task PurgeAsync()
         {
             await RespondAsync($"Executing command in {Context.Channel.Name}", ephemeral: true);
-            IEnumerable<IMessage> messages = await Context.Channel.GetMessagesAsync(100).FlattenAsync();
-            if (messages.Count() <= 0)
+            IEnumerable<IMessage> messages = await Context.Channel.GetMessagesAsync().FlattenAsync();
+            if (!messages.Any())
             {
                 await Task.CompletedTask;
                 return;
@@ -57,8 +57,8 @@ namespace AribethBot
                 await Task.CompletedTask;
                 return;
             }
-            messages = await Context.Channel.GetMessagesAsync(100).FlattenAsync();
-            if (messages.Count() > 0)
+            messages = await Context.Channel.GetMessagesAsync().FlattenAsync();
+            if (messages.Any())
             {
                 logger.LogInformation($"Still {messages.Count()} to delete");
                 foreach (IMessage message in messages)
@@ -84,7 +84,7 @@ namespace AribethBot
             SocketTextChannel channelToCopyMessagesFrom = clientToGetMessagesFrom.GetGuild(from[0]).GetTextChannel(from[1]);
             DiscordSocketClient clientToPasteMessagesTo = socketClient;
             SocketTextChannel channelToPasteMessagesFrom = clientToPasteMessagesTo.GetGuild(to[0]).GetTextChannel(to[1]);
-            IEnumerable<IMessage> messages = await channelToCopyMessagesFrom.GetMessagesAsync(100).FlattenAsync();
+            IEnumerable<IMessage> messages = await channelToCopyMessagesFrom.GetMessagesAsync().FlattenAsync();
             await DeferAsync(ephemeral: true);
             foreach (IMessage message in messages.Reverse())
             {
@@ -146,19 +146,17 @@ namespace AribethBot
             if (!Directory.Exists(destinationFolder))
                 Directory.CreateDirectory(destinationFolder);
             string path = Path.Combine(destinationFolder, destinationFileName);
-            using (FileStream outputFileStream = new FileStream(path, FileMode.Create))
-            {
-                await fileStream.CopyToAsync(outputFileStream);
-                return outputFileStream;
-            }
+            FileStream outputFileStream = new FileStream(path, FileMode.Create);
+            await fileStream.CopyToAsync(outputFileStream);
+            return outputFileStream;
         }
 
         private ulong[] ReturnGuildAndChannelsIDs(string link)
         {
             ulong[] ids = new ulong[2];
             string temp = link.Remove(0, "https://discord.com/channels/".Length);
-            ulong guildId = ulong.Parse(temp.Split("/", StringSplitOptions.None)[0]);
-            ulong channelId = ulong.Parse(temp.Split("/", StringSplitOptions.None)[1]);
+            ulong guildId = ulong.Parse(temp.Split("/")[0]);
+            ulong channelId = ulong.Parse(temp.Split("/")[1]);
             ids[0] = guildId;
             ids[1] = channelId;
             return ids;

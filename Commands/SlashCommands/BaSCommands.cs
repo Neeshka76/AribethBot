@@ -5,14 +5,14 @@ using Newtonsoft.Json;
 
 namespace AribethBot
 {
-    // Context is the "environnement" of where the command is executed
+    // Context is the "environment" of where the command is executed
     public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
     {
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
         private IConfiguration config;
         private ServiceHandler handler;
 
-        // constructor injection is also a valid way to access the dependecies
+        // constructor injection is also a valid way to access the dependencies
         public BaSCommands(ServiceHandler handler)
         {
             config = handler.Config;
@@ -37,7 +37,7 @@ namespace AribethBot
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             jsonObj["WeaponCraftingLink"] = url;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            await File.WriteAllTextAsync(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
@@ -58,10 +58,7 @@ namespace AribethBot
         public async Task LogLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
         {
             SocketUser contextUser = Context.User;
-            if (user == null)
-            {
-                user = contextUser;
-            }
+            user ??= contextUser;
             string message = MessageLogBuilder(user, contextUser);
             // Return the player log message text
             await RespondAsync($"{message}");
@@ -73,11 +70,11 @@ namespace AribethBot
             bool hasNomad = false;
             foreach (SocketRole role in (user as SocketGuildUser).Roles)
             {
-                if (role.Name.Contains("PCVR"))
+                if (role.Name.Contains("PCVR", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasPCVR = true;
                 }
-                if (role.Name.Contains("Nomad"))
+                if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasNomad = true;
                 }
@@ -104,18 +101,6 @@ namespace AribethBot
             }
             else
             {
-                if (hasPCVR & !hasNomad)
-                {
-                    //embedBuilder.Color = Color.Blue;
-                }
-                else if (!hasPCVR & hasNomad)
-                {
-                    //embedBuilder.Color = Color.Red;
-                }
-                else
-                {
-                    //embedBuilder.Color = Color.Gold;
-                }
                 message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
             }
             return message;
@@ -126,10 +111,7 @@ namespace AribethBot
         public async Task SaveLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
         {
             SocketUser contextUser = Context.User;
-            if (user == null)
-            {
-                user = contextUser;
-            }
+            user ??= contextUser;
             string message = MessageSaveBuilder(user, contextUser);
             // Return the player log message text
             await RespondAsync($"{message}");
@@ -141,11 +123,11 @@ namespace AribethBot
             bool hasNomad = false;
             foreach (SocketRole role in (user as SocketGuildUser).Roles)
             {
-                if (role.Name.Contains("PCVR"))
+                if (role.Name.Contains("PCVR", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasPCVR = true;
                 }
-                if (role.Name.Contains("Nomad"))
+                if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasNomad = true;
                 }
@@ -171,18 +153,6 @@ namespace AribethBot
             }
             else
             {
-                if (hasPCVR & !hasNomad)
-                {
-                    //embedBuilder.Color = Color.Blue;
-                }
-                else if (!hasPCVR & hasNomad)
-                {
-                    //embedBuilder.Color = Color.Red;
-                }
-                else
-                {
-                    //embedBuilder.Color = Color.Gold;
-                }
                 message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
             }
             return message;
@@ -193,10 +163,7 @@ namespace AribethBot
         public async Task CrashLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
         {
             SocketUser contextUser = Context.User;
-            if (user == null)
-            {
-                user = contextUser;
-            }
+            user ??= contextUser;
             string message = MessageCrashBuilder(user, contextUser);
             // Return the player log message text
             await RespondAsync($"{message}");
@@ -208,11 +175,11 @@ namespace AribethBot
             bool hasNomad = false;
             foreach (SocketRole role in (user as SocketGuildUser).Roles)
             {
-                if (role.Name.Contains("PCVR"))
+                if (role.Name.Contains("PCVR", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasPCVR = true;
                 }
-                if (role.Name.Contains("Nomad"))
+                if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
                 {
                     hasNomad = true;
                 }
@@ -238,15 +205,6 @@ namespace AribethBot
             }
             else
             {
-                if (hasPCVR & !hasNomad)
-                {
-                }
-                else if (!hasPCVR & hasNomad)
-                {
-                }
-                else
-                {
-                }
                 message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
             }
             return message;

@@ -11,7 +11,7 @@ namespace AribethBot
 {
     public class EntryPoint
     {
-        // setup our fields we assign later
+        // set our fields we assign later
         private IConfiguration config;
         private DiscordSocketClient socketClient;
         private DiscordSocketConfig socketConfig;

@@ -3,367 +3,277 @@ using Discord.Rest;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AribethBot;
 
 public class ServerLogger
 {
+    // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
     private readonly DiscordSocketClient socketClient;
     private readonly IConfiguration config;
-    private readonly string? channelDeletedLog;
-    private readonly string? channelEditedLog;
-    private readonly string? channelEntryOutLog;
-    private readonly string? channelBanLog;
-    private readonly string? channelVoiceActivityLog;
-    private SocketTextChannel channelEdited;
-    private SocketTextChannel channelDeleted;
-    private SocketTextChannel channelEntryOut;
-    private SocketTextChannel channelBan;
-    private SocketTextChannel channelVoiceActivity;
+    private readonly ILogger logger;
 
     public ServerLogger(IServiceProvider services)
     {
         socketClient = services.GetRequiredService<DiscordSocketClient>();
         config = services.GetRequiredService<IConfiguration>();
-        channelDeletedLog = config["channelDeletedLog"];
-        channelEditedLog = config["channelEditedLog"];
-        channelEntryOutLog = config["channelEntryOutLog"];
-        channelBanLog = config["channelBanLog"];
-        channelVoiceActivityLog = config["channelVoiceActivityLog"];
-        // process the messages 
-        socketClient.MessageUpdated += SocketClient_MessageUpdated;
-        socketClient.MessageDeleted += SocketClient_MessageDeleted;
-        socketClient.UserBanned += SocketClient_UserBanned;
-        socketClient.UserUnbanned += SocketClient_UserUnbanned;
-        socketClient.UserJoined += SocketClient_UserJoined;
-        socketClient.UserLeft += SocketClient_UserLeft;
-        socketClient.UserVoiceStateUpdated += SocketClient_UserVoiceStateUpdated;
+        logger = services.GetRequiredService<ILogger<ServerLogger>>();
+
+        // Subscribe events
+        socketClient.MessageDeleted += OnMessageDeleted;
+        socketClient.MessageUpdated += OnMessageUpdated;
+        socketClient.UserBanned += OnUserBanned;
+        socketClient.UserUnbanned += OnUserUnbanned;
+        socketClient.UserJoined += OnUserJoined;
+        socketClient.UserLeft += OnUserLeft;
+        socketClient.UserVoiceStateUpdated += OnUserVoiceStateUpdated;
+    }
+    
+    private IMessageChannel? GetLogChannel(ulong guildId, string key)
+    {
+        string? channelIdStr = config[$"guilds:{guildId}:{key}"];
+        if (string.IsNullOrEmpty(channelIdStr))
+        {
+            logger.LogWarning($"No config entry for guild {guildId} at key '{key}'.");
+            return null;
+        }
+
+        if (!ulong.TryParse(channelIdStr, out ulong channelId))
+        {
+            logger.LogWarning($"Invalid channel ID '{channelIdStr}' in config for guild {guildId}, key '{key}'.");
+            return null;
+        }
+
+        IMessageChannel? logChannel = socketClient.GetChannel(channelId) as IMessageChannel;
+        if (logChannel == null)
+            logger.LogWarning($"Could not resolve channel {channelId} for guild {guildId} (key '{key}').");
+
+        return logChannel;
     }
 
-    private async Task SocketClient_UserVoiceStateUpdated(SocketUser user, SocketVoiceState voiceStateBefore, SocketVoiceState voiceStateAfter)
+    private async Task OnMessageDeleted(Cacheable<IMessage, ulong> cache, Cacheable<IMessageChannel, ulong> channelCache)
     {
-        ulong[] channelUserJoined = ReturnGuildAndChannelsIDs(channelVoiceActivityLog);
-        channelVoiceActivity = socketClient.GetGuild(channelUserJoined[0]).GetTextChannel(channelUserJoined[1]);
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.WithCurrentTimestamp();
-        // Joined a channel and wasn't inside one channel
-        if (voiceStateBefore.VoiceChannel == null && voiceStateAfter.VoiceChannel != null)
-        {
-            embedBuilder.Title = $"Member joined voice channel";
-            embedBuilder.Description = $"{user.Mention} joined {voiceStateAfter.VoiceChannel.Mention}";
-            embedBuilder.Color = Color.Blue;
-            await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-        }
+        IMessage? message = await cache.GetOrDownloadAsync();
+        if (message is not IUserMessage userMessage || userMessage.Source != MessageSource.User) return;
 
-        // Left and was in one channel
-        if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel == null)
-        {
-            embedBuilder.Title = $"Member left voice channel";
-            embedBuilder.Description = $"{user.Mention} left {voiceStateBefore.VoiceChannel.Mention}";
-            embedBuilder.Color = Color.Red;
-            await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-        }
+        ulong guildId = (channelCache.Value as IGuildChannel)?.GuildId ?? 0;
+        if (guildId == 0) return;
 
-        // Switch from a channel to another channel
-        if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel != null && voiceStateBefore.VoiceChannel != voiceStateAfter.VoiceChannel)
-        {
-            embedBuilder.Title = $"Member left voice channel";
-            embedBuilder.Description = $"{user.Mention} left {voiceStateBefore.VoiceChannel.Mention}";
-            embedBuilder.Color = Color.Red;
-            await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-            embedBuilder.Title = $"Member joined voice channel";
-            embedBuilder.Description = $"{user.Mention} joined {voiceStateAfter.VoiceChannel.Mention}";
-            embedBuilder.Color = Color.Blue;
-            await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-        }
-        if (voiceStateBefore.VoiceChannel != null && voiceStateAfter.VoiceChannel != null && voiceStateBefore.VoiceChannel == voiceStateAfter.VoiceChannel)
-        {
-            // Started a streaming
-            if (!voiceStateBefore.IsStreaming && voiceStateAfter.IsStreaming)
-            {
-                embedBuilder.Title = $"Member started a streaming in voice channel";
-                embedBuilder.Description = $"{user.Mention} started a streaming {voiceStateAfter.VoiceChannel.Mention}";
-                embedBuilder.Color = Color.Purple;
-                await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-            }
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelDeletedLog");
+        if (logChannel == null) return;
 
-            // Ended a streaming
-            if (voiceStateBefore.IsStreaming && !voiceStateAfter.IsStreaming)
-            {
-                embedBuilder.Title = $"Member ended a streaming in voice channel";
-                embedBuilder.Description = $"{user.Mention} ended a streaming {voiceStateAfter.VoiceChannel.Mention}";
-                embedBuilder.Color = Color.Orange;
-                await channelVoiceActivity.SendMessageAsync(embed: embedBuilder.Build());
-            }
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(userMessage.Author.Username, userMessage.Author.GetAvatarUrl())
+            .WithTitle($"Message deleted in <#{userMessage.Channel.Id}>")
+            .WithDescription(userMessage.Content)
+            .WithColor(Color.Red)
+            .WithCurrentTimestamp();
+
+        if (userMessage.Attachments.Count > 0)
+        {
+            await ResendAttachmentsAsync(userMessage, embed, logChannel);
+        }
+        else
+        {
+            await logChannel.SendMessageAsync(embed: embed.Build());
         }
     }
 
-    private async Task SocketClient_UserLeft(SocketGuild guild, SocketUser user)
+    private async Task OnMessageUpdated(Cacheable<IMessage, ulong> cache, SocketMessage updatedMessage, ISocketMessageChannel channel)
     {
-        ulong[] channelUserJoined = ReturnGuildAndChannelsIDs(channelEntryOutLog);
-        channelEntryOut = socketClient.GetGuild(channelUserJoined[0]).GetTextChannel(channelUserJoined[1]);
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.Title = $"Member left";
-        SocketGuildUser guildUser = user as SocketGuildUser;
-        string roles = "";
-        int i = 0;
-        foreach (SocketRole role in guildUser.Roles)
+        IMessage? oldMessage = await cache.GetOrDownloadAsync();
+        if (oldMessage is not IUserMessage userMessage || userMessage.Source != MessageSource.User) return;
+        if (updatedMessage.Content == userMessage.Content) return;
+
+        ulong guildId = (channel as IGuildChannel)?.GuildId ?? 0;
+        if (guildId == 0) return;
+
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEditedLog");
+        if (logChannel == null) return;
+
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(userMessage.Author.Username, userMessage.Author.GetAvatarUrl())
+            .WithTitle($"Message updated in <#{userMessage.Channel.Id}>")
+            .WithDescription($"**Before:** {userMessage.Content}\n**After:** {updatedMessage.Content}")
+            .WithColor(Color.Blue)
+            .WithCurrentTimestamp();
+
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+
+    private async Task OnUserJoined(SocketGuildUser user)
+    {
+        ulong guildId = user.Guild.Id;
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEntryOutLog");
+        if (logChannel == null) return;
+
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(user.Username, user.GetAvatarUrl())
+            .WithTitle("Member joined")
+            .WithDescription($"{user.Mention} {user.Guild.MemberCount}th to join\nCreated at {user.CreatedAt} ({GetTimeDifference(user.CreatedAt)})")
+            .WithColor(Color.Green)
+            .WithCurrentTimestamp();
+
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+
+    private async Task OnUserLeft(SocketGuild guild, SocketUser user)
+    {
+        ulong guildId = guild.Id;
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEntryOutLog");
+        if (logChannel == null) return;
+
+        SocketGuildUser? guildUser = user as SocketGuildUser;
+        string roles = string.Join("; ", guildUser.Roles.Where(r => !r.IsEveryone).Select(r => r.Mention));
+
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(user.Username, user.GetAvatarUrl())
+            .WithTitle("Member left")
+            .WithDescription($"{user.Mention} joined at {guildUser.JoinedAt} ({GetTimeDifference(guildUser.JoinedAt)})\n**Roles:** {roles}")
+            .WithColor(Color.Red)
+            .WithCurrentTimestamp();
+
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+
+    private async Task OnUserBanned(SocketUser user, SocketGuild guild)
+    {
+        await Task.Delay(200); // allow audit log to populate
+        (IUser? moderator, IAuditLogEntry? entry) = await GetAuditLogResponsible(guild, user.Id, ActionType.Ban);
+        ulong guildId = guild.Id;
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelBanLog");
+        if (logChannel == null) return;
+
+        RestBan? ban = await guild.GetBanAsync(user.Id);
+
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(user.Username, user.GetAvatarUrl())
+            .WithTitle("Ban")
+            .WithDescription($"**Offender:** {user.Username} {user.Mention}\n**Reason:** {ban.Reason}")
+            .WithColor(Color.Red)
+            .WithCurrentTimestamp();
+
+        if (moderator != null)
+            embed.Description += $"\n**Responsible moderator:** {moderator.Username} {moderator.Mention}";
+
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+
+    private async Task OnUserUnbanned(SocketUser user, SocketGuild guild)
+    {
+        await Task.Delay(200);
+        (IUser? moderator, IAuditLogEntry entry) = await GetAuditLogResponsible(guild, user.Id, ActionType.Unban);
+        ulong guildId = guild.Id;
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelBanLog");
+        if (logChannel == null) return;
+
+        EmbedBuilder? embed = new EmbedBuilder()
+            .WithAuthor(user.Username, user.GetAvatarUrl())
+            .WithTitle("Unban")
+            .WithDescription($"**Offender:** {user.Username} {user.Mention}")
+            .WithColor(Color.Blue)
+            .WithCurrentTimestamp();
+
+        if (moderator != null)
+            embed.Description += $"\n**Responsible moderator:** {moderator.Username} {moderator.Mention}";
+
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+
+    private async Task OnUserVoiceStateUpdated(SocketUser user, SocketVoiceState before, SocketVoiceState after)
+    {
+        ulong guildId = (user as SocketGuildUser)?.Guild.Id ?? 0;
+        if (guildId == 0) return;
+
+        IMessageChannel? logChannel = GetLogChannel(guildId, "channelVoiceActivityLog");
+        if (logChannel == null) return;
+
+        EmbedBuilder? embed = new EmbedBuilder().WithAuthor(user.Username, user.GetAvatarUrl()).WithCurrentTimestamp();
+
+        if (before.VoiceChannel == null && after.VoiceChannel != null)
         {
-            if (role.IsEveryone)
-                continue;
-            if (i == 0)
+            embed.Title = "Member joined voice channel";
+            embed.Description = $"{user.Mention} joined {after.VoiceChannel.Mention}";
+            embed.Color = Color.Blue;
+            await logChannel.SendMessageAsync(embed: embed.Build());
+        }
+        else if (before.VoiceChannel != null && after.VoiceChannel == null)
+        {
+            embed.Title = "Member left voice channel";
+            embed.Description = $"{user.Mention} left {before.VoiceChannel.Mention}";
+            embed.Color = Color.Red;
+            await logChannel.SendMessageAsync(embed: embed.Build());
+        }
+        else if (before.VoiceChannel != null && after.VoiceChannel != null)
+        {
+            if (before.VoiceChannel != after.VoiceChannel)
             {
-                roles += role.Mention;
+                embed.Title = "Member left voice channel";
+                embed.Description = $"{user.Mention} left {before.VoiceChannel.Mention}";
+                embed.Color = Color.Red;
+                await logChannel.SendMessageAsync(embed: embed.Build());
+
+                embed.Title = "Member joined voice channel";
+                embed.Description = $"{user.Mention} joined {after.VoiceChannel.Mention}";
+                embed.Color = Color.Blue;
+                await logChannel.SendMessageAsync(embed: embed.Build());
             }
             else
             {
-                roles += "; " + role.Mention;
+                if (!before.IsStreaming && after.IsStreaming)
+                {
+                    embed.Title = "Member started streaming";
+                    embed.Description = $"{user.Mention} started streaming in {after.VoiceChannel.Mention}";
+                    embed.Color = Color.Purple;
+                    await logChannel.SendMessageAsync(embed: embed.Build());
+                }
+                else if (before.IsStreaming && !after.IsStreaming)
+                {
+                    embed.Title = "Member stopped streaming";
+                    embed.Description = $"{user.Mention} stopped streaming in {after.VoiceChannel.Mention}";
+                    embed.Color = Color.DarkPurple;
+                    await logChannel.SendMessageAsync(embed: embed.Build());
+                }
             }
-            i++;
         }
-        embedBuilder.Description = $"{user.Mention} joined {guildUser.JoinedAt} ({ReturnDateTimeOffsetDifference(guildUser.JoinedAt)}) \n" +
-                                   $"**Roles : ** {roles}";
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Red;
-        await channelEntryOut.SendMessageAsync(embed: embedBuilder.Build());
     }
 
-    private async Task SocketClient_UserJoined(SocketGuildUser guildUser)
+    private async Task ResendAttachmentsAsync(IUserMessage message, EmbedBuilder embed, IMessageChannel channel)
     {
-        ulong[] channelUserJoined = ReturnGuildAndChannelsIDs(channelEntryOutLog);
-        channelEntryOut = socketClient.GetGuild(channelUserJoined[0]).GetTextChannel(channelUserJoined[1]);
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(guildUser.Username, guildUser.GetAvatarUrl());
-        embedBuilder.Title = $"Member joined";
-        embedBuilder.Description = $"{guildUser.Mention} {guildUser.Guild.MemberCount}th to join\n" +
-                                   $"created at {guildUser.CreatedAt} ({ReturnDateTimeOffsetDifference(guildUser.CreatedAt)})";
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Green;
-        await channelEntryOut.SendMessageAsync(embed: embedBuilder.Build());
+        using HttpClient client = new HttpClient();
+        foreach (IAttachment? att in message.Attachments)
+        {
+            await using Stream stream = await client.GetStreamAsync(att.Url);
+            await channel.SendFileAsync(stream, att.Filename, embed: embed.Build());
+        }
     }
 
-    private async Task SocketClient_UserUnbanned(SocketUser user, SocketGuild guild)
+    private string GetTimeDifference(DateTimeOffset? date)
     {
-        // Delay to get the auditLogs of the unban
-        await Task.Delay(TimeSpan.FromSeconds(0.2));
-        ulong[] channelUserBan = ReturnGuildAndChannelsIDs(channelBanLog);
-        channelBan = socketClient.GetGuild(channelUserBan[0]).GetTextChannel(channelUserBan[1]);
-        // Read the audit log to get the responsible user (only displayed here)
-        IAuditLogEntry foundBanEntry = null;
-        IUser responsibleUser = null;
-        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(1, actionType: ActionType.Unban))
+        if (date == null) return "unknown";
+        TimeSpan diff = DateTimeOffset.UtcNow - date.Value;
+        return diff.Days > 0 ? $"{diff.Days} days ago" : diff.Hours > 0 ? $"{diff.Hours} hours ago" : $"{diff.Minutes} minutes ago";
+    }
+
+    private async Task<(IUser? responsible, IAuditLogEntry? foundEntry)> GetAuditLogResponsible(SocketGuild guild, ulong targetUserId, ActionType action)
+    {
+        IUser responsible = null;
+        IAuditLogEntry foundEntry = null;
+
+        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(10, actionType: action))
         {
             foreach (RestAuditLogEntry entry in batch)
             {
-                if (entry.Action != ActionType.Unban) continue;
-                if (entry.Data is BanAuditLogData banData && banData.Target.Id == user.Id)
-                {
-                    foundBanEntry = entry;
-                    responsibleUser = foundBanEntry.User;
-                }
+                dynamic data = entry.Data;
+                if (data?.Target?.Id != targetUserId) continue;
+                foundEntry = entry;
+                responsible = entry.User;
                 break;
             }
-            if (foundBanEntry != null)
-                break;
-        }
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.Title = $"Unban";
-        embedBuilder.Description =
-            $"**Offender : **{user.Username} {user.Mention}";
-        if (responsibleUser != null)
-        {
-            embedBuilder.Description +=
-                $"\n" +
-                $"**Responsible moderator : **{responsibleUser.Username} {responsibleUser.Mention}";
-        }
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Blue;
-        await channelBan.SendMessageAsync(embed: embedBuilder.Build());
-    }
-
-    private async Task SocketClient_UserBanned(SocketUser user, SocketGuild guild)
-    {
-        // Delay to get the auditLogs of the ban
-        await Task.Delay(TimeSpan.FromSeconds(0.2));
-        ulong[] channelUserBan = ReturnGuildAndChannelsIDs(channelBanLog);
-        channelBan = socketClient.GetGuild(channelUserBan[0]).GetTextChannel(channelUserBan[1]);
-        // Only needed to get the reason of the ban
-        RestBan restBan = await guild.GetBanAsync(user.Id);
-        // Read the audit log to get the responsible user (only displayed here)
-        IAuditLogEntry foundBanEntry = null;
-        IUser responsibleUser = null;
-        await foreach (IReadOnlyCollection<RestAuditLogEntry>? batch in guild.GetAuditLogsAsync(1, actionType: ActionType.Ban))
-        {
-            foreach (RestAuditLogEntry entry in batch)
-            {
-                if (entry.Action != ActionType.Ban) continue;
-                if (entry.Data is BanAuditLogData banData && banData.Target.Id == user.Id)
-                {
-                    foundBanEntry = entry;
-                    responsibleUser = foundBanEntry.User;
-                }
-                break;
-            }
-            if (foundBanEntry != null)
-                break;
-        }
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.Title = $"Ban";
-        embedBuilder.Description =
-            $"**Offender : **{user.Username} {user.Mention}\n" +
-            $"**Reason : **{restBan.Reason}";
-        if (responsibleUser != null)
-        {
-            embedBuilder.Description +=
-                $"\n" +
-                $"**Responsible moderator : **{responsibleUser.Username} {responsibleUser.Mention}";
-        }
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Red;
-        await channelBan.SendMessageAsync(embed: embedBuilder.Build());
-    }
-
-    private async Task SocketClient_MessageDeleted(Cacheable<IMessage, ulong> message, Cacheable<IMessageChannel, ulong> channel)
-    {
-        ulong[] channelDeletedParse = ReturnGuildAndChannelsIDs(channelDeletedLog);
-        channelDeleted = socketClient.GetGuild(channelDeletedParse[0]).GetTextChannel(channelDeletedParse[1]);
-        IMessage oldMessage = message.GetOrDownloadAsync().Result;
-        // ensures we don't process system/other bot messages
-        if (oldMessage is not SocketUserMessage userMessage)
-        {
-            return;
-        }
-        if (oldMessage.Source != MessageSource.User)
-        {
-            return;
-        }
-        SocketUser user = userMessage.Author;
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.Title = $"Message deleted in <#{userMessage.Channel.Id}>";
-        embedBuilder.Description = $"{userMessage.Content}";
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Red;
-        if (userMessage.Attachments.Count != 0)
-            await ResendAttachmentsAsync(userMessage, embedBuilder, channelDeleted);
-        else
-            await channelDeleted.SendMessageAsync(embed: embedBuilder.Build());
-    }
-
-    private async Task SocketClient_MessageUpdated(Cacheable<IMessage, ulong> message, SocketMessage updatedMessage, ISocketMessageChannel channel)
-    {
-        ulong[] channelEditedParse = ReturnGuildAndChannelsIDs(channelEditedLog);
-        channelEdited = socketClient.GetGuild(channelEditedParse[0]).GetTextChannel(channelEditedParse[1]);
-        IMessage oldMessage = message.GetOrDownloadAsync().Result;
-        // ensures we don't process system/other bot messages
-        if (oldMessage is not SocketUserMessage userMessage)
-        {
-            return;
-        }
-        if (oldMessage.Source != MessageSource.User)
-        {
-            return;
+            if (foundEntry != null) break;
         }
 
-        // Ensure that the message isn't the same (cause by embedded)
-        if (updatedMessage.Content == userMessage.Content)
-            return;
-        SocketUser user = userMessage.Author;
-        EmbedBuilder embedBuilder = new EmbedBuilder();
-        embedBuilder.WithAuthor(user.Username, user.GetAvatarUrl());
-        embedBuilder.Title = $"Message updated in <#{userMessage.Channel.Id}>";
-        embedBuilder.Description = $"**Before : **\n{userMessage.Content}\n" +
-                                   $"**After : **\n{updatedMessage.Content}";
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Blue;
-        await channelEdited.SendMessageAsync(embed: embedBuilder.Build());
-    }
-
-    private async Task ResendAttachmentsAsync(IMessage originalMessage, EmbedBuilder embedBuilder, IMessageChannel targetChannel)
-    {
-        using HttpClient httpClient = new HttpClient();
-        string message = "";
-        int i = 0;
-        foreach (IAttachment? attachment in originalMessage.Attachments)
-        {
-            i++;
-            message += attachment.Url;
-            if (i != originalMessage.Attachments.Count)
-                message += "\n";
-        }
-        await targetChannel.SendMessageAsync(text: message, embed: embedBuilder.Build());
-    }
-
-    private string ReturnDateTimeOffsetDifference(DateTimeOffset? startDate)
-    {
-        DateTimeOffset endDate = DateTimeOffset.Now;
-        DateTimeOffset actualStartDate = startDate ?? new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        if (startDate == null)
-            return "";
-        // Calculate the difference in years, months, days, hours, minutes and seconds
-        int years = endDate.Year - actualStartDate.Year;
-        int months = endDate.Month - actualStartDate.Month;
-        int days = endDate.Day - actualStartDate.Day;
-        int hours = endDate.Hour - actualStartDate.Hour;
-        int minutes = endDate.Minute - actualStartDate.Minute;
-        int seconds = endDate.Second - actualStartDate.Second;
-        if (seconds < 0)
-        {
-            minutes--;
-            seconds += 60;
-        }
-        if (minutes < 0)
-        {
-            hours--;
-            minutes += 60;
-        }
-        if (hours < 0)
-        {
-            days--;
-            hours += 24;
-        }
-        if (days < 0)
-        {
-            months--;
-            days += DateTime.DaysInMonth(actualStartDate.Year, (actualStartDate.Month + months) % 12);
-        }
-        if (months < 0)
-        {
-            years--;
-            months += 12;
-        }
-        string dateStrToReturn = "";
-        if (years != 0)
-            dateStrToReturn += years + $" year{(years == 1 ? "" : "s")},";
-        if (months != 0)
-            dateStrToReturn += " " + months + $" month{(months == 1 ? "" : "s")},";
-        if (days != 0)
-            dateStrToReturn += " " + days + $" day{(days == 1 ? "" : "s")},";
-        if (hours != 0)
-            dateStrToReturn += " " + hours + $" hour{(hours == 1 ? "" : "s")},";
-        if (minutes != 0)
-            dateStrToReturn += " " + minutes + $" minute{(minutes == 1 ? "" : "s")},";
-        if (seconds != 0)
-            dateStrToReturn += " " + seconds + $" second{(seconds == 1 ? "" : "s")}";
-        if (dateStrToReturn.EndsWith(','))
-            dateStrToReturn = dateStrToReturn.Substring(0, dateStrToReturn.Length - 1);
-        if (dateStrToReturn.StartsWith(" "))
-            dateStrToReturn = dateStrToReturn.Substring(1);
-        return dateStrToReturn;
-    }
-
-    private ulong[] ReturnGuildAndChannelsIDs(string? link)
-    {
-        ulong[] ids = new ulong[2];
-        string temp = link.Remove(0, "https://discord.com/channels/".Length);
-        ulong guildId = ulong.Parse(temp.Split("/")[0]);
-        ulong channelId = ulong.Parse(temp.Split("/")[1]);
-        ids[0] = guildId;
-        ids[1] = channelId;
-        return ids;
+        return (responsible, foundEntry);
     }
 }

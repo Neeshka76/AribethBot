@@ -1,6 +1,4 @@
 ﻿using Discord.Interactions;
-using Discord.WebSocket;
-using Microsoft.Extensions.Logging;
 
 namespace AribethBot
 {
@@ -84,6 +82,10 @@ namespace AribethBot
                     case TypeOfError.TimeZone:
                         message += " : \nMake sure to put a values between -12 & 14 for the timezone";
                         break;
+                    case TypeOfError.None:
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
                 }
             }
             else

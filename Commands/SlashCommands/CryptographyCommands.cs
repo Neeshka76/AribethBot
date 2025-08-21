@@ -26,8 +26,7 @@ namespace AribethBot
                 shift.ToString(),
                 messageToEncrypt
             ];
-            string result = "";
-            result = cryptography.Encoder(cipher, parameters);
+            string result = cryptography.Encoder(cipher, parameters);
             // Return the encrypted text
             await RespondAsync($"Your text encrypted with the **{cipher}** cipher with a shift of **{shift}**\n```{result}```");
         }
@@ -45,8 +44,7 @@ namespace AribethBot
                 shift.ToString(),
                 messageToDecrypt
             ];
-            string result = "";
-            result = cryptography.Decoder(cipher, parameters);
+            string result = cryptography.Decoder(cipher, parameters);
             // Return the decrypted text
             await RespondAsync($"Your text decrypted with the **{cipher}** cipher with a shift of **{shift}**\n```{result}```");
         }

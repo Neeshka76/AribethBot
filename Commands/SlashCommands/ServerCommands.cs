@@ -2,7 +2,6 @@
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace AribethBot
@@ -21,7 +20,7 @@ namespace AribethBot
             this.handler = handler;
         }
         
-        [RequireOwner()]
+        [RequireOwner]
         [SlashCommand("classicspamtrignbmsg", "Edit the number of messages for classic spam detection")]
         public async Task EditClassicSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
         {
@@ -30,7 +29,7 @@ namespace AribethBot
             string oldValue = jsonObj["nbMessagesSpamTriggerClassic"];
             jsonObj["nbMessagesSpamTriggerClassic"] = nbMessages;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            await File.WriteAllTextAsync(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
@@ -38,7 +37,7 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Number of messages for the ClassicSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
-        [RequireOwner()]
+        [RequireOwner]
         [SlashCommand("classicspamtriginttime", "Edit the time interval for classic spam detection")]
         public async Task EditClassicSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
         {
@@ -47,7 +46,7 @@ namespace AribethBot
             string oldValue = jsonObj["intervalTimeSpamTriggerClassic"];
             jsonObj["intervalTimeSpamTriggerClassic"] = timeInterval.ToString();
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            await File.WriteAllTextAsync(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
@@ -56,7 +55,7 @@ namespace AribethBot
             await RespondAsync($"Time interval for the ClassicSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
         }
         
-        [RequireOwner()]
+        [RequireOwner]
         [SlashCommand("botspamtrignbmsg", "Edit the number of messages for bot spam detection")]
         public async Task EditBotSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
         {
@@ -65,7 +64,7 @@ namespace AribethBot
             string oldValue = jsonObj["nbMessagesSpamTriggerBot"];
             jsonObj["nbMessagesSpamTriggerBot"] = nbMessages;
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            await File.WriteAllTextAsync(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
@@ -73,16 +72,17 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Number of messages for the BotSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
-        [RequireOwner()]
+        [RequireOwner]
         [SlashCommand("botspamtriginttime", "Edit the time interval for bot spam detection")]
         public async Task EditBotSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
         {
-            string json = await File.ReadAllTextAsync(AppContext.BaseDirectory + "config.json");
+            string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+            string json = await File.ReadAllTextAsync(filePath);
             dynamic jsonObj = JsonConvert.DeserializeObject(json);
             string oldValue = jsonObj["intervalTimeSpamTriggerBot"];
             jsonObj["intervalTimeSpamTriggerBot"] = timeInterval.ToString();
             string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            File.WriteAllText(AppContext.BaseDirectory + "config.json", output);
+            await File.WriteAllTextAsync(AppContext.BaseDirectory + "config.json", output);
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
@@ -90,6 +90,73 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Time interval for the BotSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
         }
+        
+        public enum LogChannelType
+        {
+            Deleted,
+            Edited,
+            EntryOut,
+            Ban,
+            Voice
+        }
+        
+        [RequireUserPermission(GuildPermission.Administrator)]
+        [SlashCommand("setlogchannel", "Set a log channel for this guild")]
+        public async Task SetLogChannel(
+            [Summary("type", "The type of log")] LogChannelType type,
+            [Summary("channel_id", "The ID of the channel")] ulong channelId)
+        {
+            string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+            string json = await File.ReadAllTextAsync(filePath);
+            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+
+            string guildId = Context.Guild.Id.ToString();
+
+            // Map enum to config key
+            string? configKey = type switch
+            {
+                LogChannelType.Deleted => "channelDeletedLog",
+                LogChannelType.Edited => "channelEditedLog",
+                LogChannelType.EntryOut => "channelEntryOutLog",
+                LogChannelType.Ban => "channelBanLog",
+                LogChannelType.Voice => "channelVoiceActivityLog",
+                _ => null
+            };
+
+            if (configKey == null)
+            {
+                await RespondAsync("Invalid log type.");
+                return;
+            }
+
+            // Ensure guild config exists
+            if (jsonObj["guilds"][guildId] == null)
+            {
+                jsonObj["guilds"][guildId] = new
+                {
+                    channelDeletedLog = "0",
+                    channelEditedLog = "0",
+                    channelEntryOutLog = "0",
+                    channelBanLog = "0",
+                    channelVoiceActivityLog = "0"
+                };
+            }
+
+            // Update config with raw channel ID
+            jsonObj["guilds"][guildId][configKey] = channelId.ToString();
+
+            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
+            await File.WriteAllTextAsync(filePath, output);
+
+            // Reload config
+            IConfigurationBuilder builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("config.json", optional: false, reloadOnChange: true);
+            config = builder.Build();
+
+            await RespondAsync($"Updated `{type}` log channel to <#{channelId}>");
+        }
+
         
 
         [SlashCommand("serverstats", "Send stats about the server")]
@@ -108,11 +175,13 @@ namespace AribethBot
             embedBuilder.Description = $"Stats of {serverName}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
-            EmbedFieldBuilder ownerFieldBuilder = new EmbedFieldBuilder();
-            ownerFieldBuilder.Name = "Owner";
-            ownerFieldBuilder.Value = $"Name : {Context.Guild.Owner.Mention}\n" +
-                                      $"Account created at : {Context.Guild.Owner.CreatedAt}\n" +
-                                      $"Account joined at : {Context.Guild.Owner.JoinedAt}";
+            EmbedFieldBuilder ownerFieldBuilder = new EmbedFieldBuilder
+            {
+                Name = "Owner",
+                Value = $"Name : {Context.Guild.Owner.Mention}\n" +
+                        $"Account created at : {Context.Guild.Owner.CreatedAt}\n" +
+                        $"Account joined at : {Context.Guild.Owner.JoinedAt}"
+            };
             if (Context.Guild.Owner.Activities.Count > 0)
             {
                 ownerFieldBuilder.Value += $"\n" +
@@ -161,46 +230,52 @@ namespace AribethBot
                     if (socketRole.IsEveryone) continue;
                     ownerFieldBuilder.Value += $"- {socketRole}";
                     if (socketRole.IsMentionable)
-                        ownerFieldBuilder.Value += $" (***@***)";
-                    ownerFieldBuilder.Value += $"\n";
+                        ownerFieldBuilder.Value += " (***@***)";
+                    ownerFieldBuilder.Value += "\n";
                 }
             }
             ownerFieldBuilder.IsInline = true;
             embedBuilder.AddField(ownerFieldBuilder);
             int nbBots = NbBots(Context.Guild);
-            EmbedFieldBuilder serverStatsBuilder = new EmbedFieldBuilder();
-            serverStatsBuilder.Name = "Members";
-            serverStatsBuilder.Value = $"All Members : {Context.Guild.MemberCount}\n" +
-                                       $"Bots : {nbBots}\n" +
-                                       $"Humans : {Context.Guild.MemberCount - nbBots}\n";
-            serverStatsBuilder.IsInline = true;
+            EmbedFieldBuilder serverStatsBuilder = new EmbedFieldBuilder
+            {
+                Name = "Members",
+                Value = $"All Members : {Context.Guild.MemberCount}\n" +
+                        $"Bots : {nbBots}\n" +
+                        $"Humans : {Context.Guild.MemberCount - nbBots}\n",
+                IsInline = true
+            };
             embedBuilder.AddField(serverStatsBuilder);
-            EmbedFieldBuilder roleStatsBuilder = new EmbedFieldBuilder();
-            roleStatsBuilder.Name = "Roles";
-            roleStatsBuilder.Value = $"Number of Roles : {Context.Guild.Roles.Count}\n" +
-                                     $"Highest Role : {HighestRole(Context.Guild)}\n" +
-                                     $"Most popular Role : {MostPopularMemberRole(Context.Guild)}\n" +
-                                     $"Roles and numbers of members (***Mentionable***): \n";
+            EmbedFieldBuilder roleStatsBuilder = new EmbedFieldBuilder
+            {
+                Name = "Roles",
+                Value = $"Number of Roles : {Context.Guild.Roles.Count}\n" +
+                        $"Highest Role : {HighestRole(Context.Guild)}\n" +
+                        $"Most popular Role : {MostPopularMemberRole(Context.Guild)}\n" +
+                        $"Roles and numbers of members (***Mentionable***): \n"
+            };
             foreach (SocketRole socketRole in Context.Guild.Roles.OrderByDescending(x => x.Position))
             {
                 if (socketRole.IsEveryone) continue;
                 roleStatsBuilder.Value += $"- {socketRole} : {socketRole.Members.Count()}";
                 if (socketRole.IsMentionable)
-                    roleStatsBuilder.Value += $" (***@***)";
-                roleStatsBuilder.Value += $"\n";
+                    roleStatsBuilder.Value += " (***@***)";
+                roleStatsBuilder.Value += "\n";
             }
             roleStatsBuilder.IsInline = true;
             embedBuilder.AddField(roleStatsBuilder);
-            EmbedFieldBuilder channelStatsBuilder = new EmbedFieldBuilder();
-            channelStatsBuilder.Name = "Channels";
-            channelStatsBuilder.Value = $"Number of Channels : {Context.Guild.Channels.Count}\n" +
-                                        $"- Text Channels : {Context.Guild.TextChannels.Count}\n" +
-                                        $"- Voice Channels : {Context.Guild.VoiceChannels.Count}\n" +
-                                        $"- Category Channels : {Context.Guild.CategoryChannels.Count}\n" +
-                                        $"- Media Channels : {Context.Guild.MediaChannels.Count}\n" +
-                                        $"- Forum Channels : {Context.Guild.ForumChannels.Count}\n" +
-                                        $"- Thread Channels : {Context.Guild.ThreadChannels.Count}\n" +
-                                        $"- Stage Channels : {Context.Guild.StageChannels.Count}\n";
+            EmbedFieldBuilder channelStatsBuilder = new EmbedFieldBuilder
+            {
+                Name = "Channels",
+                Value = $"Number of Channels : {Context.Guild.Channels.Count}\n" +
+                        $"- Text Channels : {Context.Guild.TextChannels.Count}\n" +
+                        $"- Voice Channels : {Context.Guild.VoiceChannels.Count}\n" +
+                        $"- Category Channels : {Context.Guild.CategoryChannels.Count}\n" +
+                        $"- Media Channels : {Context.Guild.MediaChannels.Count}\n" +
+                        $"- Forum Channels : {Context.Guild.ForumChannels.Count}\n" +
+                        $"- Thread Channels : {Context.Guild.ThreadChannels.Count}\n" +
+                        $"- Stage Channels : {Context.Guild.StageChannels.Count}\n"
+            };
             if (Context.Guild.DefaultChannel != null)
                 channelStatsBuilder.Value += $"Default Channel : {Context.Guild.DefaultChannel.Mention}\n";
             if (Context.Guild.AFKChannel != null)
@@ -226,11 +301,9 @@ namespace AribethBot
             SocketRole roleReturned = null;
             foreach (SocketRole role in socketGuild.Roles)
             {
-                if (role.Position > rolePos)
-                {
-                    rolePos = role.Position;
-                    roleReturned = role;
-                }
+                if (role.Position <= rolePos) continue;
+                rolePos = role.Position;
+                roleReturned = role;
             }
             return roleReturned;
         }
@@ -243,11 +316,9 @@ namespace AribethBot
             {
                 if (role.IsEveryone) continue;
                 int nbMember = role.Members.Count();
-                if (nbMember > roleNbMembers)
-                {
-                    roleNbMembers = nbMember;
-                    roleReturned = role;
-                }
+                if (nbMember <= roleNbMembers) continue;
+                roleNbMembers = nbMember;
+                roleReturned = role;
             }
             return roleReturned;
         }
@@ -267,10 +338,7 @@ namespace AribethBot
         {
             await DeferAsync();
             SocketGuildUser contextUser = Context.User as SocketGuildUser;
-            if (user == null)
-            {
-                user = contextUser;
-            }
+            user ??= contextUser;
             EmbedBuilder embedBuilder = new EmbedBuilder();
             //    .WithAuthor(guildUser.ToString(), guildUser.GetAvatarUrl() ?? guildUser.GetDefaultAvatarUrl())
             //    .WithTitle("Roles")
@@ -283,11 +351,13 @@ namespace AribethBot
             embedBuilder.Description = $"Stats of {user.Mention}";
             embedBuilder.WithCurrentTimestamp();
             embedBuilder.Color = Color.Red;
-            EmbedFieldBuilder userFieldBuilder = new EmbedFieldBuilder();
-            userFieldBuilder.Name = "User";
-            userFieldBuilder.Value = $"Name : {user.Username}\n" +
-                                     $"Account created at : {user.CreatedAt}\n" +
-                                     $"Account joined at : {user.JoinedAt}";
+            EmbedFieldBuilder userFieldBuilder = new EmbedFieldBuilder
+            {
+                Name = "User",
+                Value = $"Name : {user.Username}\n" +
+                        $"Account created at : {user.CreatedAt}\n" +
+                        $"Account joined at : {user.JoinedAt}"
+            };
             if (user.Activities.Count > 0)
             {
                 userFieldBuilder.Value += $"\n" +
@@ -336,8 +406,8 @@ namespace AribethBot
                     if (socketRole.IsEveryone) continue;
                     userFieldBuilder.Value += $"- {socketRole}";
                     if (socketRole.IsMentionable)
-                        userFieldBuilder.Value += $" (***@***)";
-                    userFieldBuilder.Value += $"\n";
+                        userFieldBuilder.Value += " (***@***)";
+                    userFieldBuilder.Value += "\n";
                 }
             }
             userFieldBuilder.IsInline = true;
@@ -406,7 +476,7 @@ namespace AribethBot
                 ulong roleNomad = 1000461086648176802;
                 ulong roleBetaPCVR = 980767452487106601;
                 ulong roleBetaNomad = 1189150798060462121;
-                foreach (SocketRole role in (user as SocketGuildUser).Roles)
+                foreach (SocketRole role in user.Roles)
                 {
                     // PCVR
                     if (role.Id == rolePCVR)
@@ -429,14 +499,16 @@ namespace AribethBot
                         hasBetaNomad = true;
                     }
                     else continue;
-                    if (hasPCVR && !hasBetaPCVR)
+                    switch (hasPCVR)
                     {
-                        await user.AddRoleAsync(roleBetaPCVR);
+                        case true when !hasBetaPCVR:
+                            await user.AddRoleAsync(roleBetaPCVR);
+                            break;
+                        case false when hasBetaPCVR:
+                            await user.AddRoleAsync(rolePCVR);
+                            break;
                     }
-                    if (!hasPCVR && hasBetaPCVR)
-                    {
-                        await user.AddRoleAsync(rolePCVR);
-                    }
+
                     if (hasNomad && !hasBetaNomad)
                     {
                         await user.AddRoleAsync(roleBetaNomad);
@@ -447,7 +519,7 @@ namespace AribethBot
                     }
                 }
                 if (i % 10 == 0 || i == (Context.Guild.Users.Count - 1))
-                    await FollowupAsync($"Done for :{user.DisplayName}; {i} / {Context.Guild.Users.Count}; {((float)i * 100f / Context.Guild.Users.Count)}%");
+                    await FollowupAsync($"Done for :{user.DisplayName}; {i} / {Context.Guild.Users.Count}; {(i * 100f / Context.Guild.Users.Count)}%");
                 i++;
             }
         }
