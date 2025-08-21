@@ -55,20 +55,6 @@ namespace AribethBot
             foreach (SocketGuild guild in client.Guilds)
             {
                 logger.LogInformation($"\t- {guild.Name} ({guild.Id})");
-
-                // 🔍 Debug config section for this guild
-                IConfigurationSection guildSection = config.GetSection($"guilds:{guild.Id}");
-                if (!guildSection.Exists())
-                {
-                    logger.LogWarning($"[DEBUG] No config section found for guild {guild.Id}");
-                }
-                else
-                {
-                    foreach (IConfigurationSection kvp in guildSection.GetChildren())
-                    {
-                        logger.LogInformation($"[DEBUG] Config entry for guild {guild.Id}: {kvp.Key} = {kvp.Value}");
-                    }
-                }
             }
             await client.SetGameAsync("over Neverwinter", type: ActivityType.Watching);
         }

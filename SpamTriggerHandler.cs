@@ -37,9 +37,21 @@ namespace AribethBot
             int botLimit = int.Parse(config["nbMessagesSpamTriggerBot"]);
             double botInterval = double.Parse(config["intervalTimeSpamTriggerBot"]);
 
-            logger.LogInformation(
-                $"Message written by {rawMessage.Author} ({rawMessage.Author.Id}) in {rawMessage.Channel.Name} at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}.");
-
+            if (rawMessage.Channel is SocketGuildChannel guildChannel)
+            {
+                logger.LogInformation(
+                    $"Message written by {rawMessage.Author} ({rawMessage.Author.Id}) " +
+                    $"in {rawMessage.Channel.Name} (Guild: {guildChannel.Guild.Name} [{guildChannel.Guild.Id}]) " +
+                    $"at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}.");
+            }
+            else
+            {
+                // Fallback for DMs or group chats
+                logger.LogInformation(
+                    $"Message written by {rawMessage.Author} ({rawMessage.Author.Id}) " +
+                    $"in {rawMessage.Channel.Name} (DM / Group Chat) " +
+                    $"at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}.");
+            }
             UserMessageInfo userInfo = userMessages.GetValueOrDefault(message.Author.Id) ?? new UserMessageInfo();
             userMessages[message.Author.Id] = userInfo;
 
