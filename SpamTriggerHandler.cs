@@ -81,7 +81,7 @@ namespace AribethBot
                 {
                     await guildChannel.GetUser(message.Author.Id)
                         .BanAsync(1, "Aribeth smited the spammer", RequestOptions.Default);
-                    logger.LogInformation($"User {message.Author} ({message.Author.Id}) banned for spamming.");
+                    logger.LogInformation($"User {message.Author} ({message.Author.Id}) banned from {guildChannel.Guild.Name} ({guildChannel.Guild.Id}) for spamming.");
                 }
 
                 userInfo.Clear();
@@ -114,7 +114,7 @@ namespace AribethBot
 
             public void Cleanup(DateTime now, double interval)
             {
-                foreach (var list in messagesPerChannel.Values)
+                foreach (List<DateTime> list in messagesPerChannel.Values)
                     list.RemoveAll(t => (now - t).TotalSeconds > interval);
             }
 
