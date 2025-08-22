@@ -4,6 +4,8 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace AribethBot;
 
@@ -30,27 +32,65 @@ public class ServerLogger
         socketClient.UserVoiceStateUpdated += OnUserVoiceStateUpdated;
     }
     
-    private IMessageChannel? GetLogChannel(ulong guildId, string key)
+    private async Task EnsureGuildConfigExistsAsync(ulong guildId)
+{
+    string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+
+    // Load and parse the JSON
+    JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
+
+    string guildIdStr = guildId.ToString();
+
+    // Ensure "guilds" section exists
+    jsonObj["guilds"] ??= new JObject();
+
+    // Ensure this guild section exists
+    if (jsonObj["guilds"][guildIdStr] == null)
     {
-        string? channelIdStr = config[$"guilds:{guildId}:{key}"];
-        if (string.IsNullOrEmpty(channelIdStr))
+        jsonObj["guilds"][guildIdStr] = JObject.FromObject(new
         {
-            logger.LogWarning($"No config entry for guild {guildId} at key '{key}'.");
-            return null;
-        }
+            channelDeletedLog = "0",
+            channelEditedLog = "0",
+            channelEntryOutLog = "0",
+            channelBanLog = "0",
+            channelVoiceActivityLog = "0"
+        });
 
-        if (!ulong.TryParse(channelIdStr, out ulong channelId))
-        {
-            logger.LogWarning($"Invalid channel ID '{channelIdStr}' in config for guild {guildId}, key '{key}'.");
-            return null;
-        }
-
-        IMessageChannel? logChannel = socketClient.GetChannel(channelId) as IMessageChannel;
-        if (logChannel == null)
-            logger.LogWarning($"Could not resolve channel {channelId} for guild {guildId} (key '{key}').");
-
-        return logChannel;
+        await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
+        logger.LogInformation($"Created default config for guild {socketClient.GetGuild(guildId)?.Name} ({guildId})");
     }
+}
+
+private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
+{
+    // Ensure guild config exists
+    await EnsureGuildConfigExistsAsync(guildId);
+
+    // Load the config JSON
+    string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+    JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
+
+    string guildIdStr = guildId.ToString();
+    string? channelIdStr = (string?)jsonObj["guilds"]?[guildIdStr]?[key];
+
+    if (string.IsNullOrEmpty(channelIdStr) || channelIdStr == "0")
+    {
+        //logger.LogWarning($"No log channel set for {socketClient.GetGuild(guildId)?.Name} ({guildId}) key '{key}'");
+        return null;
+    }
+
+    if (!ulong.TryParse(channelIdStr, out ulong channelId))
+    {
+        logger.LogWarning($"Invalid channel ID '{channelIdStr}' for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}), key '{key}'");
+        return null;
+    }
+
+    IMessageChannel? logChannel = socketClient.GetChannel(channelId) as IMessageChannel;
+    if (logChannel == null)
+        logger.LogWarning($"Could not resolve channel {channelId} for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}) (key '{key}')");
+
+    return logChannel;
+}
 
     private async Task OnMessageDeleted(Cacheable<IMessage, ulong> cache, Cacheable<IMessageChannel, ulong> channelCache)
     {
@@ -60,7 +100,7 @@ public class ServerLogger
         ulong guildId = (channelCache.Value as IGuildChannel)?.GuildId ?? 0;
         if (guildId == 0) return;
 
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelDeletedLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelDeletedLog");
         if (logChannel == null) return;
 
         EmbedBuilder? embed = new EmbedBuilder()
@@ -89,7 +129,7 @@ public class ServerLogger
         ulong guildId = (channel as IGuildChannel)?.GuildId ?? 0;
         if (guildId == 0) return;
 
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEditedLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelEditedLog");
         if (logChannel == null) return;
 
         EmbedBuilder? embed = new EmbedBuilder()
@@ -105,7 +145,7 @@ public class ServerLogger
     private async Task OnUserJoined(SocketGuildUser user)
     {
         ulong guildId = user.Guild.Id;
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEntryOutLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelEntryOutLog");
         if (logChannel == null) return;
 
         EmbedBuilder? embed = new EmbedBuilder()
@@ -121,7 +161,7 @@ public class ServerLogger
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)
     {
         ulong guildId = guild.Id;
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelEntryOutLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelEntryOutLog");
         if (logChannel == null) return;
 
         SocketGuildUser? guildUser = user as SocketGuildUser;
@@ -142,7 +182,7 @@ public class ServerLogger
         await Task.Delay(200); // allow audit log to populate
         (IUser? moderator, IAuditLogEntry? entry) = await GetAuditLogResponsible(guild, user.Id, ActionType.Ban);
         ulong guildId = guild.Id;
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelBanLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelBanLog");
         if (logChannel == null) return;
 
         RestBan? ban = await guild.GetBanAsync(user.Id);
@@ -165,7 +205,7 @@ public class ServerLogger
         await Task.Delay(200);
         (IUser? moderator, IAuditLogEntry entry) = await GetAuditLogResponsible(guild, user.Id, ActionType.Unban);
         ulong guildId = guild.Id;
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelBanLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelBanLog");
         if (logChannel == null) return;
 
         EmbedBuilder? embed = new EmbedBuilder()
@@ -186,7 +226,7 @@ public class ServerLogger
         ulong guildId = (user as SocketGuildUser)?.Guild.Id ?? 0;
         if (guildId == 0) return;
 
-        IMessageChannel? logChannel = GetLogChannel(guildId, "channelVoiceActivityLog");
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelVoiceActivityLog");
         if (logChannel == null) return;
 
         EmbedBuilder? embed = new EmbedBuilder().WithAuthor(user.Username, user.GetAvatarUrl()).WithCurrentTimestamp();

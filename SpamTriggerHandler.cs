@@ -32,10 +32,10 @@ namespace AribethBot
             if (rawMessage is not SocketUserMessage message || message.Source != MessageSource.User) return;
 
             // Load limits from config
-            int classicLimit = int.Parse(config["nbMessagesSpamTriggerClassic"]);
-            double classicInterval = double.Parse(config["intervalTimeSpamTriggerClassic"]);
-            int botLimit = int.Parse(config["nbMessagesSpamTriggerBot"]);
-            double botInterval = double.Parse(config["intervalTimeSpamTriggerBot"]);
+            int classicLimit = config.GetValue<int>("nbMessagesSpamTriggerClassic");
+            double classicInterval = config.GetValue<double>("intervalTimeSpamTriggerClassic");
+            int botLimit = config.GetValue<int>("nbMessagesSpamTriggerBot");
+            double botInterval = config.GetValue<double>("intervalTimeSpamTriggerBot");
 
             if (rawMessage.Channel is SocketGuildChannel guildChannel)
             {

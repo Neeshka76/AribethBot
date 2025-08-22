@@ -3,6 +3,7 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace AribethBot
 {
@@ -104,11 +105,13 @@ namespace AribethBot
         [SlashCommand("setlogchannel", "Set a log channel for this guild")]
         public async Task SetLogChannel(
             [Summary("type", "The type of log")] LogChannelType type,
-            [Summary("channel_id", "The ID of the channel")] ulong channelId)
+            [Summary("channel_id", "The ID of the channel")] string channelId)
         {
             string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
             string json = await File.ReadAllTextAsync(filePath);
-            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+
+            // Parse as JObject (safe, no dynamic)
+            JObject jsonObj = JObject.Parse(json);
 
             string guildId = Context.Guild.Id.ToString();
 
@@ -129,32 +132,26 @@ namespace AribethBot
                 return;
             }
 
-            // Ensure guild config exists
-            if (jsonObj["guilds"][guildId] == null)
+            // Ensure the "guilds" section exists
+            jsonObj["guilds"] ??= new JObject();
+
+            // Ensure this guild exists
+            jsonObj["guilds"][guildId] ??= JObject.FromObject(new
             {
-                jsonObj["guilds"][guildId] = new
-                {
-                    channelDeletedLog = "0",
-                    channelEditedLog = "0",
-                    channelEntryOutLog = "0",
-                    channelBanLog = "0",
-                    channelVoiceActivityLog = "0"
-                };
-            }
+                channelDeletedLog = "0",
+                channelEditedLog = "0",
+                channelEntryOutLog = "0",
+                channelBanLog = "0",
+                channelVoiceActivityLog = "0"
+            });
 
-            // Update config with raw channel ID
-            jsonObj["guilds"][guildId][configKey] = channelId.ToString();
+            // Update the channel ID
+            jsonObj["guilds"][guildId][configKey] = channelId;
 
-            string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-            await File.WriteAllTextAsync(filePath, output);
-
-            // Reload config
-            IConfigurationBuilder builder = new ConfigurationBuilder()
-                .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("config.json", optional: false, reloadOnChange: true);
-            config = builder.Build();
-
-            await RespondAsync($"Updated `{type}` log channel to <#{channelId}>");
+            // Save back to file
+            await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
+            
+            await RespondAsync($"Updated `{type}` log channel to <#{channelId}> for this guild.");
         }
 
         

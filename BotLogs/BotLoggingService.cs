@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace AribethBot
 {
@@ -148,24 +149,33 @@ namespace AribethBot
         {
             string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
             string json = await File.ReadAllTextAsync(filePath);
-            dynamic jsonObj = JsonConvert.DeserializeObject(json);
+
+            // Use JObject for safe manipulation
+            JObject jsonObj = JObject.Parse(json);
 
             string guildId = guild.Id.ToString();
 
+            // Ensure "guilds" section exists
+            jsonObj["guilds"] ??= new JObject();
+
+            // Check if this guild exists
             if (jsonObj["guilds"][guildId] == null)
             {
-                jsonObj["guilds"][guildId] = new
+                // Use JObject.FromObject to safely convert the anonymous type
+                JObject guildConfig = JObject.FromObject(new
                 {
                     channelDeletedLog = "0",
                     channelEditedLog = "0",
                     channelEntryOutLog = "0",
                     channelBanLog = "0",
                     channelVoiceActivityLog = "0"
-                };
+                });
 
-                string output = JsonConvert.SerializeObject(jsonObj, Formatting.Indented);
-                await File.WriteAllTextAsync(filePath, output);
+                // Assign it directly to the guild key
+                jsonObj["guilds"][guildId] = guildConfig;
 
+                // Save changes
+                await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
                 logger.LogInformation($"Created default config for guild {guild.Name} ({guild.Id})");
             }
             else
