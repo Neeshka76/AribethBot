@@ -1,4 +1,5 @@
-﻿using Discord;
+﻿using System.Text;
+using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
@@ -9,18 +10,17 @@ namespace AribethBot
 {
     public class ServerCommands : InteractionModuleBase<SocketInteractionContext>
     {
-        
         // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
         private IConfiguration config;
         private ServiceHandler handler;
-        
+
         // constructor injection is also a valid way to access the dependencies
         public ServerCommands(ServiceHandler handler)
         {
             config = handler.Config;
             this.handler = handler;
         }
-        
+
         [RequireOwner]
         [SlashCommand("classicspamtrignbmsg", "Edit the number of messages for classic spam detection")]
         public async Task EditClassicSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
@@ -38,6 +38,7 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Number of messages for the ClassicSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
+
         [RequireOwner]
         [SlashCommand("classicspamtriginttime", "Edit the time interval for classic spam detection")]
         public async Task EditClassicSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
@@ -55,7 +56,7 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Time interval for the ClassicSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
         }
-        
+
         [RequireOwner]
         [SlashCommand("botspamtrignbmsg", "Edit the number of messages for bot spam detection")]
         public async Task EditBotSpamTriggerNbMessages([Summary("NbMessages", "value for the number of messages")] int nbMessages)
@@ -73,6 +74,7 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Number of messages for the BotSpamTrigger is updated ! ({oldValue} -> {nbMessages})");
         }
+
         [RequireOwner]
         [SlashCommand("botspamtriginttime", "Edit the time interval for bot spam detection")]
         public async Task EditBotSpamTriggerIntervalTime([Summary("IntervalTime", "value for the time interval")] double timeInterval)
@@ -91,7 +93,7 @@ namespace AribethBot
             handler.Config = config;
             await RespondAsync($"Time interval for the BotSpamTrigger is updated ! ({oldValue} -> {timeInterval})");
         }
-        
+
         public enum LogChannelType
         {
             Deleted,
@@ -100,12 +102,13 @@ namespace AribethBot
             Ban,
             Voice
         }
-        
+
         [RequireUserPermission(GuildPermission.Administrator)]
         [SlashCommand("setlogchannel", "Set a log channel for this guild")]
         public async Task SetLogChannel(
             [Summary("type", "The type of log")] LogChannelType type,
-            [Summary("channel_id", "The ID of the channel")] string channelId)
+            [Summary("channel_id", "The ID of the channel (0 for not logging)")]
+            string channelId)
         {
             string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
             string json = await File.ReadAllTextAsync(filePath);
@@ -150,145 +153,128 @@ namespace AribethBot
 
             // Save back to file
             await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
-            
+
             await RespondAsync($"Updated `{type}` log channel to <#{channelId}> for this guild.");
         }
-
-        
 
         [SlashCommand("serverstats", "Send stats about the server")]
         public async Task ServerStats()
         {
             await DeferAsync();
-            EmbedBuilder embedBuilder = new EmbedBuilder();
-            //    .WithAuthor(guildUser.ToString(), guildUser.GetAvatarUrl() ?? guildUser.GetDefaultAvatarUrl())
-            //    .WithTitle("Roles")
-            //    .WithDescription(roleList)
-            //    .WithColor(Color.Green)
-            //    .WithCurrentTimestamp();
-            string serverName = Context.Guild.Name;
-            embedBuilder.WithAuthor(Context.Guild.Owner.GlobalName);
-            embedBuilder.Title = "Server Stats";
-            embedBuilder.Description = $"Stats of {serverName}";
-            embedBuilder.WithCurrentTimestamp();
-            embedBuilder.Color = Color.Red;
-            EmbedFieldBuilder ownerFieldBuilder = new EmbedFieldBuilder
+            EmbedBuilder? embedBuilder = new EmbedBuilder()
+                .WithAuthor(Context.Guild.Owner.GlobalName)
+                .WithTitle("Server Stats")
+                .WithDescription($"Stats of {Context.Guild.Name}")
+                .WithCurrentTimestamp()
+                .WithColor(Color.Red);
+
+            // --- Owner Info ---
+            StringBuilder ownerBuilder = new StringBuilder();
+            SocketGuildUser? owner = Context.Guild.Owner;
+
+            ownerBuilder.AppendLine($"Name : {owner.Mention}");
+            ownerBuilder.AppendLine($"Account created at : {owner.CreatedAt:g}");
+            ownerBuilder.AppendLine($"Account joined at : {owner.JoinedAt:g}");
+
+            if (owner.Activities.Count > 0)
             {
-                Name = "Owner",
-                Value = $"Name : {Context.Guild.Owner.Mention}\n" +
-                        $"Account created at : {Context.Guild.Owner.CreatedAt}\n" +
-                        $"Account joined at : {Context.Guild.Owner.JoinedAt}"
-            };
-            if (Context.Guild.Owner.Activities.Count > 0)
-            {
-                ownerFieldBuilder.Value += $"\n" +
-                                           $"Activity :";
-                foreach (IActivity activity in Context.Guild.Owner.Activities)
+                ownerBuilder.AppendLine("Activity:");
+                foreach (IActivity? activity in owner.Activities)
                 {
-                    switch (activity)
+                    string? line = activity switch
                     {
-                        case SpotifyGame spotifyGame:
-                        {
-                            ownerFieldBuilder.Value += $"\n" +
-                                                       $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
-                        }
-                            break;
-                        case CustomStatusGame customStatusGame:
-                        {
-                            ownerFieldBuilder.Value += $"\n" +
-                                                       $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
-                        }
-                            break;
-                        case RichGame richGame:
-                        {
-                            ownerFieldBuilder.Value += $"\n" +
-                                                       $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
-                        }
-                            break;
-                        case StreamingGame streamingGame:
-                        {
-                            ownerFieldBuilder.Value += $"\n" +
-                                                       $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
-                        }
-                            break;
-                        case Game game:
-                        {
-                            ownerFieldBuilder.Value += $"\n" +
-                                                       $"- **{game.Type}** : {game.Name}";
-                        }
-                            break;
-                    }
+                        SpotifyGame spotify => $"- **{spotify.Type}** to {spotify.Name} : *{spotify.TrackTitle}* by *{spotify.Artists.FirstOrDefault()}* on *{spotify.AlbumTitle}*",
+                        CustomStatusGame custom => $"- **{custom.Type}** : {custom.Emote} {custom.State}",
+                        RichGame rich => $"- **{rich.Type}** : {rich.Name} {rich.State} {rich.LargeAsset}",
+                        StreamingGame streaming => $"- **{streaming.Type}** : {streaming.Name} {streaming.Url}",
+                        Game game => $"- **{game.Type}** : {game.Name}",
+                        _ => null
+                    };
+                    if (line != null) ownerBuilder.AppendLine(line);
                 }
-                ownerFieldBuilder.Value += $"\n" +
-                                           $"Roles ({Context.Guild.Owner.Roles.Count}) :" +
-                                           $"\n";
-                foreach (SocketRole socketRole in Context.Guild.Owner.Roles.OrderByDescending(x => x.Position))
+
+                ownerBuilder.AppendLine($"\nRoles ({owner.Roles.Count}):");
+                foreach (SocketRole? role in owner.Roles.OrderByDescending(r => r.Position))
                 {
-                    if (socketRole.IsEveryone) continue;
-                    ownerFieldBuilder.Value += $"- {socketRole}";
-                    if (socketRole.IsMentionable)
-                        ownerFieldBuilder.Value += " (***@***)";
-                    ownerFieldBuilder.Value += "\n";
+                    if (role.IsEveryone) continue;
+                    ownerBuilder.Append($"- {role}");
+                    if (role.IsMentionable) ownerBuilder.Append(" (***@***)");
+                    ownerBuilder.AppendLine();
                 }
             }
-            ownerFieldBuilder.IsInline = true;
-            embedBuilder.AddField(ownerFieldBuilder);
+
+            embedBuilder.AddField(new EmbedFieldBuilder
+            {
+                Name = "Owner",
+                Value = ownerBuilder.ToString(),
+                IsInline = true
+            });
+
+            // --- Members ---
             int nbBots = NbBots(Context.Guild);
-            EmbedFieldBuilder serverStatsBuilder = new EmbedFieldBuilder
+            embedBuilder.AddField(new EmbedFieldBuilder
             {
                 Name = "Members",
                 Value = $"All Members : {Context.Guild.MemberCount}\n" +
                         $"Bots : {nbBots}\n" +
-                        $"Humans : {Context.Guild.MemberCount - nbBots}\n",
+                        $"Humans : {Context.Guild.MemberCount - nbBots}",
                 IsInline = true
-            };
-            embedBuilder.AddField(serverStatsBuilder);
-            EmbedFieldBuilder roleStatsBuilder = new EmbedFieldBuilder
+            });
+
+            // --- Roles ---
+            StringBuilder roleBuilder = new StringBuilder();
+            roleBuilder.AppendLine($"Number of Roles : {Context.Guild.Roles.Count}");
+            roleBuilder.AppendLine($"Highest Role : {HighestRole(Context.Guild)}");
+            roleBuilder.AppendLine($"Most popular Role : {MostPopularMemberRole(Context.Guild)}");
+            roleBuilder.AppendLine("Roles and numbers of members (***Mentionable***):");
+
+            foreach (SocketRole? role in Context.Guild.Roles.OrderByDescending(r => r.Position))
+            {
+                if (role.IsEveryone) continue;
+                roleBuilder.Append($"- {role} : {role.Members.Count()}");
+                if (role.IsMentionable) roleBuilder.Append(" (***@***)");
+                roleBuilder.AppendLine();
+            }
+
+            embedBuilder.AddField(new EmbedFieldBuilder
             {
                 Name = "Roles",
-                Value = $"Number of Roles : {Context.Guild.Roles.Count}\n" +
-                        $"Highest Role : {HighestRole(Context.Guild)}\n" +
-                        $"Most popular Role : {MostPopularMemberRole(Context.Guild)}\n" +
-                        $"Roles and numbers of members (***Mentionable***): \n"
-            };
-            foreach (SocketRole socketRole in Context.Guild.Roles.OrderByDescending(x => x.Position))
+                Value = roleBuilder.ToString(),
+                IsInline = true
+            });
+
+            // --- Channels ---
+            StringBuilder channelBuilder = new StringBuilder();
+            SocketGuild? guild = Context.Guild;
+            channelBuilder.AppendLine($"Number of Channels : {guild.Channels.Count}");
+            channelBuilder.AppendLine($"- Text Channels : {guild.TextChannels.Count}");
+            channelBuilder.AppendLine($"- Voice Channels : {guild.VoiceChannels.Count}");
+            channelBuilder.AppendLine($"- Category Channels : {guild.CategoryChannels.Count}");
+            channelBuilder.AppendLine($"- Media Channels : {guild.MediaChannels.Count}");
+            channelBuilder.AppendLine($"- Forum Channels : {guild.ForumChannels.Count}");
+            channelBuilder.AppendLine($"- Thread Channels : {guild.ThreadChannels.Count}");
+            channelBuilder.AppendLine($"- Stage Channels : {guild.StageChannels.Count}");
+
+            void AppendChannelInfo(IChannel? channel, string label)
             {
-                if (socketRole.IsEveryone) continue;
-                roleStatsBuilder.Value += $"- {socketRole} : {socketRole.Members.Count()}";
-                if (socketRole.IsMentionable)
-                    roleStatsBuilder.Value += " (***@***)";
-                roleStatsBuilder.Value += "\n";
+                if (channel != null) channelBuilder.AppendLine($"{label} : {(channel is ITextChannel text ? text.Mention : channel.Name)}");
             }
-            roleStatsBuilder.IsInline = true;
-            embedBuilder.AddField(roleStatsBuilder);
-            EmbedFieldBuilder channelStatsBuilder = new EmbedFieldBuilder
+
+            AppendChannelInfo(guild.DefaultChannel, "Default Channel");
+            AppendChannelInfo(guild.AFKChannel, "AFK Channel");
+            AppendChannelInfo(guild.RulesChannel, "Rules Channel");
+            AppendChannelInfo(guild.PublicUpdatesChannel, "Public Updates Channel");
+            AppendChannelInfo(guild.SystemChannel, "System Channel");
+            AppendChannelInfo(guild.SafetyAlertsChannel, "Safety Alerts Channel");
+            AppendChannelInfo(guild.WidgetChannel, "Widget Channel");
+
+            embedBuilder.AddField(new EmbedFieldBuilder
             {
                 Name = "Channels",
-                Value = $"Number of Channels : {Context.Guild.Channels.Count}\n" +
-                        $"- Text Channels : {Context.Guild.TextChannels.Count}\n" +
-                        $"- Voice Channels : {Context.Guild.VoiceChannels.Count}\n" +
-                        $"- Category Channels : {Context.Guild.CategoryChannels.Count}\n" +
-                        $"- Media Channels : {Context.Guild.MediaChannels.Count}\n" +
-                        $"- Forum Channels : {Context.Guild.ForumChannels.Count}\n" +
-                        $"- Thread Channels : {Context.Guild.ThreadChannels.Count}\n" +
-                        $"- Stage Channels : {Context.Guild.StageChannels.Count}\n"
-            };
-            if (Context.Guild.DefaultChannel != null)
-                channelStatsBuilder.Value += $"Default Channel : {Context.Guild.DefaultChannel.Mention}\n";
-            if (Context.Guild.AFKChannel != null)
-                channelStatsBuilder.Value += $"AFK Channel : {Context.Guild.AFKChannel.Mention}\n";
-            if (Context.Guild.RulesChannel != null)
-                channelStatsBuilder.Value += $"Rules Channel : {Context.Guild.RulesChannel.Mention}\n";
-            if (Context.Guild.PublicUpdatesChannel != null)
-                channelStatsBuilder.Value += $"Public Updates Channel : {Context.Guild.PublicUpdatesChannel.Mention}\n";
-            if (Context.Guild.SystemChannel != null)
-                channelStatsBuilder.Value += $"System Channel : {Context.Guild.SystemChannel.Mention}\n";
-            if (Context.Guild.SafetyAlertsChannel != null)
-                channelStatsBuilder.Value += $"Safety Alerts Channel : {Context.Guild.SafetyAlertsChannel.Name}\n";
-            if (Context.Guild.WidgetChannel != null)
-                channelStatsBuilder.Value += $"Widget Channel : {Context.Guild.WidgetChannel.Name}\n";
-            channelStatsBuilder.IsInline = true;
-            embedBuilder.AddField(channelStatsBuilder);
+                Value = channelBuilder.ToString(),
+                IsInline = true
+            });
+
             await FollowupAsync(embed: embedBuilder.Build());
         }
 
@@ -302,6 +288,7 @@ namespace AribethBot
                 rolePos = role.Position;
                 roleReturned = role;
             }
+
             return roleReturned;
         }
 
@@ -317,6 +304,7 @@ namespace AribethBot
                 roleNbMembers = nbMember;
                 roleReturned = role;
             }
+
             return roleReturned;
         }
 
@@ -327,6 +315,7 @@ namespace AribethBot
             {
                 if (user.IsBot) nbBots++;
             }
+
             return nbBots;
         }
 
@@ -395,6 +384,7 @@ namespace AribethBot
                             break;
                     }
                 }
+
                 userFieldBuilder.Value += $"\n" +
                                           $"Roles ({user.Roles.Count}) :" +
                                           $"\n";
@@ -407,6 +397,7 @@ namespace AribethBot
                     userFieldBuilder.Value += "\n";
                 }
             }
+
             userFieldBuilder.IsInline = true;
             embedBuilder.AddField(userFieldBuilder);
             await FollowupAsync(embed: embedBuilder.Build());
@@ -465,6 +456,7 @@ namespace AribethBot
                     i++;
                     continue;
                 }
+
                 bool hasPCVR = false;
                 bool hasNomad = false;
                 bool hasBetaPCVR = false;
@@ -496,6 +488,7 @@ namespace AribethBot
                         hasBetaNomad = true;
                     }
                     else continue;
+
                     switch (hasPCVR)
                     {
                         case true when !hasBetaPCVR:
@@ -510,11 +503,13 @@ namespace AribethBot
                     {
                         await user.AddRoleAsync(roleBetaNomad);
                     }
+
                     if (!hasNomad && hasBetaNomad)
                     {
                         await user.AddRoleAsync(roleNomad);
                     }
                 }
+
                 if (i % 10 == 0 || i == (Context.Guild.Users.Count - 1))
                     await FollowupAsync($"Done for :{user.DisplayName}; {i} / {Context.Guild.Users.Count}; {(i * 100f / Context.Guild.Users.Count)}%");
                 i++;

@@ -31,66 +31,66 @@ public class ServerLogger
         socketClient.UserLeft += OnUserLeft;
         socketClient.UserVoiceStateUpdated += OnUserVoiceStateUpdated;
     }
-    
+
     private async Task EnsureGuildConfigExistsAsync(ulong guildId)
-{
-    string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
-
-    // Load and parse the JSON
-    JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
-
-    string guildIdStr = guildId.ToString();
-
-    // Ensure "guilds" section exists
-    jsonObj["guilds"] ??= new JObject();
-
-    // Ensure this guild section exists
-    if (jsonObj["guilds"][guildIdStr] == null)
     {
-        jsonObj["guilds"][guildIdStr] = JObject.FromObject(new
+        string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+
+        // Load and parse the JSON
+        JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
+
+        string guildIdStr = guildId.ToString();
+
+        // Ensure "guilds" section exists
+        jsonObj["guilds"] ??= new JObject();
+
+        // Ensure this guild section exists
+        if (jsonObj["guilds"][guildIdStr] == null)
         {
-            channelDeletedLog = "0",
-            channelEditedLog = "0",
-            channelEntryOutLog = "0",
-            channelBanLog = "0",
-            channelVoiceActivityLog = "0"
-        });
+            jsonObj["guilds"][guildIdStr] = JObject.FromObject(new
+            {
+                channelDeletedLog = "0",
+                channelEditedLog = "0",
+                channelEntryOutLog = "0",
+                channelBanLog = "0",
+                channelVoiceActivityLog = "0"
+            });
 
-        await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
-        logger.LogInformation($"Created default config for guild {socketClient.GetGuild(guildId)?.Name} ({guildId})");
+            await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
+            logger.LogInformation($"Created default config for guild {socketClient.GetGuild(guildId)?.Name} ({guildId})");
+        }
     }
-}
 
-private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
-{
-    // Ensure guild config exists
-    await EnsureGuildConfigExistsAsync(guildId);
-
-    // Load the config JSON
-    string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
-    JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
-
-    string guildIdStr = guildId.ToString();
-    string? channelIdStr = (string?)jsonObj["guilds"]?[guildIdStr]?[key];
-
-    if (string.IsNullOrEmpty(channelIdStr) || channelIdStr == "0")
+    private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
     {
-        //logger.LogWarning($"No log channel set for {socketClient.GetGuild(guildId)?.Name} ({guildId}) key '{key}'");
-        return null;
+        // Ensure guild config exists
+        await EnsureGuildConfigExistsAsync(guildId);
+
+        // Load the config JSON
+        string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
+        JObject jsonObj = JObject.Parse(await File.ReadAllTextAsync(filePath));
+
+        string guildIdStr = guildId.ToString();
+        string? channelIdStr = (string?)jsonObj["guilds"]?[guildIdStr]?[key];
+
+        if (string.IsNullOrEmpty(channelIdStr) || channelIdStr == "0")
+        {
+            //logger.LogWarning($"No log channel set for {socketClient.GetGuild(guildId)?.Name} ({guildId}) key '{key}'");
+            return null;
+        }
+
+        if (!ulong.TryParse(channelIdStr, out ulong channelId))
+        {
+            logger.LogWarning($"Invalid channel ID '{channelIdStr}' for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}), key '{key}'");
+            return null;
+        }
+
+        IMessageChannel? logChannel = socketClient.GetChannel(channelId) as IMessageChannel;
+        if (logChannel == null)
+            logger.LogWarning($"Could not resolve channel {channelId} for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}) (key '{key}')");
+
+        return logChannel;
     }
-
-    if (!ulong.TryParse(channelIdStr, out ulong channelId))
-    {
-        logger.LogWarning($"Invalid channel ID '{channelIdStr}' for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}), key '{key}'");
-        return null;
-    }
-
-    IMessageChannel? logChannel = socketClient.GetChannel(channelId) as IMessageChannel;
-    if (logChannel == null)
-        logger.LogWarning($"Could not resolve channel {channelId} for guild {socketClient.GetGuild(guildId)?.Name} ({guildId}) (key '{key}')");
-
-    return logChannel;
-}
 
     private async Task OnMessageDeleted(Cacheable<IMessage, ulong> cache, Cacheable<IMessageChannel, ulong> channelCache)
     {
@@ -164,16 +164,20 @@ private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
         IMessageChannel? logChannel = await GetLogChannel(guildId, "channelEntryOutLog");
         if (logChannel == null) return;
 
-        SocketGuildUser? guildUser = user as SocketGuildUser;
-        string roles = string.Join("; ", guildUser.Roles.Where(r => !r.IsEveryone).Select(r => r.Mention));
-
+        SocketGuildUser? guildUser = guild.GetUser(user.Id);
+        string roles = guildUser != null
+            ? string.Join("; ", guildUser.Roles.Where(r => !r.IsEveryone).Select(r => r.Mention))
+            : "Unknown";
+        string joinedAt = guildUser?.JoinedAt?.ToString("g") ?? "Unknown";
+        string timeDiff = guildUser?.JoinedAt != null
+            ? GetTimeDifference(guildUser.JoinedAt)
+            : "Unknown";
         EmbedBuilder? embed = new EmbedBuilder()
-            .WithAuthor(user.Username, user.GetAvatarUrl())
+            .WithAuthor(user.Username, user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl())
             .WithTitle("Member left")
-            .WithDescription($"{user.Mention} joined at {guildUser.JoinedAt} ({GetTimeDifference(guildUser.JoinedAt)})\n**Roles:** {roles}")
+            .WithDescription($"{user.Mention} joined at {joinedAt} ({timeDiff})\n**Roles:** {roles}")
             .WithColor(Color.Red)
             .WithCurrentTimestamp();
-
         await logChannel.SendMessageAsync(embed: embed.Build());
     }
 
@@ -311,6 +315,7 @@ private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
                 responsible = entry.User;
                 break;
             }
+
             if (foundEntry != null) break;
         }
 

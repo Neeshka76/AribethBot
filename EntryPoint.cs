@@ -30,7 +30,7 @@ namespace AribethBot
             
             socketConfig = new DiscordSocketConfig
             {
-                MessageCacheSize = 100,
+                MessageCacheSize = 1000,
                 GatewayIntents = GatewayIntents.All,
                 UseInteractionSnowflakeDate = false,
                 LogGatewayIntentWarnings = false,
