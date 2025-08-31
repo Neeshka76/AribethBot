@@ -42,7 +42,7 @@ namespace AribethBot
             // if a command isn't found, log that info to console and exit this method
             if (!command.IsSpecified)
             {
-                Logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command failed to execute by [{context.User.Username}] on [{context.Guild.Name}] <-> [{result.ErrorReason}]!");
                 // failure scenario, let's let the user know
                 await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
                 return;
@@ -51,7 +51,7 @@ namespace AribethBot
             // log success to the console and exit this method
             if (result.IsSuccess)
             {
-                Logger.LogInformation($"Command [{command.Value.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{command.Value.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
         }
 
@@ -65,9 +65,23 @@ namespace AribethBot
         {
             try
             {
-                // create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
-                var ctx = new SocketInteractionContext(SocketClient, arg);
-                await interactions.ExecuteCommandAsync(ctx, services);
+                switch (arg.Type)
+                {
+                    case InteractionType.ApplicationCommand:
+                        // Slash or context command
+                        SocketInteractionContext ctx = new SocketInteractionContext(SocketClient, arg);
+                        await interactions.ExecuteCommandAsync(ctx, services);
+                        break;
+
+                    case InteractionType.MessageComponent:
+                        // Button / select menu
+                        
+                        break;
+
+                    default:
+                        Logger.LogWarning("Unhandled interaction type: {Type}", arg.Type);
+                        break;
+                }
             }
             catch (Exception ex)
             {
@@ -88,28 +102,28 @@ namespace AribethBot
                 /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
                 }*/
-                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute by [{context.User.Username}] on [{context.Guild.Name}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }
@@ -121,28 +135,28 @@ namespace AribethBot
                 /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
                 }*/
-                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute by [{context.User.Username}] on [{context.Guild.Name}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }
@@ -154,28 +168,28 @@ namespace AribethBot
                 /*switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.UnknownCommand:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.BadArgs:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Exception:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     case InteractionCommandError.Unsuccessful:
-                        logger.LogError($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                        logger.LogError($"Command failed to execute by [{context.User.Username}] <-> [{result.ErrorReason}]!");
                         break;
                     default:
                         break;
                 }*/
-                Logger.LogError($"Command [{commandInfo.Name}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                Logger.LogError($"Command [{commandInfo.Name}] failed to execute by [{context.User.Username}] on [{context.Guild.Name}] <-> [{result.ErrorReason}]!");
             }
             else
             {
-                Logger.LogInformation($"Command [{commandInfo.Name}] executed for [{context.User.Username}] on [{context.Guild.Name}]");
+                Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
             return Task.CompletedTask;
         }

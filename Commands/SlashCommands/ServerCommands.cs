@@ -1,10 +1,14 @@
 ﻿using System.Text;
+using AribethBot.Helpers;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace AribethBot
 {
@@ -158,20 +162,17 @@ namespace AribethBot
         }
 
         [SlashCommand("serverstats", "Send stats about the server")]
-        public async Task ServerStats()
+        public async Task ServerStats(
+            [Summary("ephemeral", "Set to false to make the message visible to everyone (default is ephemeral at true)")]
+            bool ephemeral = true)
         {
-            await DeferAsync();
-            EmbedBuilder? embedBuilder = new EmbedBuilder()
-                .WithAuthor(Context.Guild.Owner.GlobalName)
-                .WithTitle("Server Stats")
-                .WithDescription($"Stats of {Context.Guild.Name}")
-                .WithCurrentTimestamp()
-                .WithColor(Color.Red);
+            await DeferAsync(ephemeral);
+
+            SocketGuild guild = Context.Guild;
+            SocketGuildUser owner = guild.Owner;
 
             // --- Owner Info ---
             StringBuilder ownerBuilder = new StringBuilder();
-            SocketGuildUser? owner = Context.Guild.Owner;
-
             ownerBuilder.AppendLine($"Name : {owner.Mention}");
             ownerBuilder.AppendLine($"Account created at : {owner.CreatedAt:g}");
             ownerBuilder.AppendLine($"Account joined at : {owner.JoinedAt:g}");
@@ -192,43 +193,32 @@ namespace AribethBot
                     };
                     if (line != null) ownerBuilder.AppendLine(line);
                 }
-
-                ownerBuilder.AppendLine($"\nRoles ({owner.Roles.Count}):");
-                foreach (SocketRole? role in owner.Roles.OrderByDescending(r => r.Position))
-                {
-                    if (role.IsEveryone) continue;
-                    ownerBuilder.Append($"- {role}");
-                    if (role.IsMentionable) ownerBuilder.Append(" (***@***)");
-                    ownerBuilder.AppendLine();
-                }
             }
 
-            embedBuilder.AddField(new EmbedFieldBuilder
+            ownerBuilder.AppendLine($"\nRoles ({owner.Roles.Count}):");
+            foreach (SocketRole role in owner.Roles.OrderByDescending(r => r.Position))
             {
-                Name = "Owner",
-                Value = ownerBuilder.ToString(),
-                IsInline = true
-            });
+                if (role.IsEveryone) continue;
+                ownerBuilder.Append($"- {role}");
+                if (role.IsMentionable) ownerBuilder.Append(" (***@***)");
+                ownerBuilder.AppendLine();
+            }
 
             // --- Members ---
-            int nbBots = NbBots(Context.Guild);
-            embedBuilder.AddField(new EmbedFieldBuilder
-            {
-                Name = "Members",
-                Value = $"All Members : {Context.Guild.MemberCount}\n" +
-                        $"Bots : {nbBots}\n" +
-                        $"Humans : {Context.Guild.MemberCount - nbBots}",
-                IsInline = true
-            });
+            int nbBots = guild.Users.Count(u => u.IsBot);
+            string memberStats =
+                $"All Members : {guild.MemberCount}\n" +
+                $"Bots : {nbBots}\n" +
+                $"Humans : {guild.MemberCount - nbBots}";
 
             // --- Roles ---
             StringBuilder roleBuilder = new StringBuilder();
-            roleBuilder.AppendLine($"Number of Roles : {Context.Guild.Roles.Count}");
-            roleBuilder.AppendLine($"Highest Role : {HighestRole(Context.Guild)}");
-            roleBuilder.AppendLine($"Most popular Role : {MostPopularMemberRole(Context.Guild)}");
+            roleBuilder.AppendLine($"Number of Roles : {guild.Roles.Count}");
+            roleBuilder.AppendLine($"Highest Role : {guild.Roles.OrderByDescending(r => r.Position).First()}");
+            roleBuilder.AppendLine($"Most popular Role : {guild.Roles.OrderByDescending(r => r.Members.Count()).First()}");
             roleBuilder.AppendLine("Roles and numbers of members (***Mentionable***):");
 
-            foreach (SocketRole? role in Context.Guild.Roles.OrderByDescending(r => r.Position))
+            foreach (SocketRole role in guild.Roles.OrderByDescending(r => r.Position))
             {
                 if (role.IsEveryone) continue;
                 roleBuilder.Append($"- {role} : {role.Members.Count()}");
@@ -236,16 +226,8 @@ namespace AribethBot
                 roleBuilder.AppendLine();
             }
 
-            embedBuilder.AddField(new EmbedFieldBuilder
-            {
-                Name = "Roles",
-                Value = roleBuilder.ToString(),
-                IsInline = true
-            });
-
             // --- Channels ---
             StringBuilder channelBuilder = new StringBuilder();
-            SocketGuild? guild = Context.Guild;
             channelBuilder.AppendLine($"Number of Channels : {guild.Channels.Count}");
             channelBuilder.AppendLine($"- Text Channels : {guild.TextChannels.Count}");
             channelBuilder.AppendLine($"- Voice Channels : {guild.VoiceChannels.Count}");
@@ -255,11 +237,6 @@ namespace AribethBot
             channelBuilder.AppendLine($"- Thread Channels : {guild.ThreadChannels.Count}");
             channelBuilder.AppendLine($"- Stage Channels : {guild.StageChannels.Count}");
 
-            void AppendChannelInfo(IChannel? channel, string label)
-            {
-                if (channel != null) channelBuilder.AppendLine($"{label} : {(channel is ITextChannel text ? text.Mention : channel.Name)}");
-            }
-
             AppendChannelInfo(guild.DefaultChannel, "Default Channel");
             AppendChannelInfo(guild.AFKChannel, "AFK Channel");
             AppendChannelInfo(guild.RulesChannel, "Rules Channel");
@@ -268,55 +245,69 @@ namespace AribethBot
             AppendChannelInfo(guild.SafetyAlertsChannel, "Safety Alerts Channel");
             AppendChannelInfo(guild.WidgetChannel, "Widget Channel");
 
-            embedBuilder.AddField(new EmbedFieldBuilder
+            // --- Collect all fields ---
+            List<(string, string, bool)> fields = new List<(string, string, bool)>
             {
-                Name = "Channels",
-                Value = channelBuilder.ToString(),
-                IsInline = true
-            });
+                ("Owner", ownerBuilder.ToString(), false),
+                ("Members", memberStats, true),
+                ("Roles", roleBuilder.ToString(), false),
+                ("Channels", channelBuilder.ToString(), false)
+            };
 
-            await FollowupAsync(embed: embedBuilder.Build());
+            List<Embed> pages = await BuildEmbedsFromFields(fields, guild.Name);
+
+            await ButtonPaginator.SendPaginatedEmbedsAsync(Context, pages, $"Server Stats for {guild.Name}", ephemeral);
+            return;
+
+            void AppendChannelInfo(IChannel? channel, string label)
+            {
+                if (channel != null) channelBuilder.AppendLine($"{label} : {(channel is ITextChannel text ? text.Mention : channel.Name)}");
+            }
         }
 
-        private SocketRole HighestRole(SocketGuild socketGuild)
+        private static Task<List<Embed>> BuildEmbedsFromFields(List<(string Name, string Value, bool Inline)> fields, string title)
         {
-            int rolePos = 0;
-            SocketRole roleReturned = null;
-            foreach (SocketRole role in socketGuild.Roles)
+            const int MaxEmbedFieldLength = 1024;
+            const int MaxEmbedTotalLength = 6000;
+
+            List<Embed> embeds = new List<Embed>();
+            EmbedBuilder builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
+            int currentLength = 0;
+
+            foreach ((string Name, string Value, bool Inline) field in fields)
             {
-                if (role.Position <= rolePos) continue;
-                rolePos = role.Position;
-                roleReturned = role;
+                string remaining = field.Value;
+                int chunkIndex = 0;
+
+                while (remaining.Length > MaxEmbedFieldLength)
+                {
+                    string chunk = remaining.Substring(0, MaxEmbedFieldLength);
+                    builder.AddField(field.Name + (chunkIndex > 0 ? $" (cont.)" : ""), chunk, field.Inline);
+                    embeds.Add(builder.Build());
+
+                    remaining = remaining.Substring(MaxEmbedFieldLength);
+                    builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
+                    chunkIndex++;
+                }
+
+                if (!string.IsNullOrEmpty(remaining))
+                {
+                    builder.AddField(field.Name + (chunkIndex > 0 ? $" (cont.)" : ""), remaining, field.Inline);
+                    currentLength += remaining.Length;
+                }
+
+                if (currentLength <= MaxEmbedTotalLength) continue;
+                embeds.Add(builder.Build());
+                builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
+                currentLength = 0;
             }
 
-            return roleReturned;
-        }
-
-        private SocketRole MostPopularMemberRole(SocketGuild socketGuild)
-        {
-            int roleNbMembers = 0;
-            SocketRole roleReturned = null;
-            foreach (SocketRole role in socketGuild.Roles)
+            if (builder.Fields.Count > 0)
             {
-                if (role.IsEveryone) continue;
-                int nbMember = role.Members.Count();
-                if (nbMember <= roleNbMembers) continue;
-                roleNbMembers = nbMember;
-                roleReturned = role;
+                embeds.Add(builder.Build());
             }
 
-            return roleReturned;
-        }
-
-        private int NbBots(SocketGuild socketGuild)
-        {
-            int nbBots = 0;
-            foreach (SocketGuildUser user in socketGuild.Users)
-            {
-                if (user.IsBot) nbBots++;
-            }
-
-            return nbBots;
+            return Task.FromResult(embeds);
         }
 
         [SlashCommand("userstats", "Send stats about the user")]

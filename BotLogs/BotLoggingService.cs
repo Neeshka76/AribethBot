@@ -39,64 +39,53 @@ namespace AribethBot
         // this method executes on the bot being connected/ready
         public async Task OnReadyAsync()
         {
-            if (IsDebug())
-            {
-                logger.LogInformation($"In Debug mode !");
-                //await PurgeGlobalCommands();
-                //await ConfigureLocalCommands();
-            }
-            else
-            {
-                logger.LogInformation($"In Runtime mode !");
-                //await PurgeLocalCommands();
-                await ConfigureGlobalCommands();
-            }
             logger.LogInformation($"Connected as -> [{client.CurrentUser}] :)");
             logger.LogInformation($"We are on [{client.Guilds.Count}] servers");
             foreach (SocketGuild guild in client.Guilds)
             {
                 logger.LogInformation($"\t- {guild.Name} ({guild.Id})");
             }
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (IsDebug())
+                    {
+                        logger.LogInformation("In Debug mode!");
+                        await PurgeGlobalCommands();    // remove global commands
+                        await RegisterGuildCommands(); // register per-guild
+                    }
+                    else
+                    {
+                        logger.LogInformation("In Runtime mode!");
+                        await PurgeGlobalCommands();     // always ensure globals are gone
+                        await RegisterGuildCommands();  // only guild commands
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error while configuring commands in background.");
+                }
+            });
+            
             await client.SetGameAsync("over Neverwinter", type: ActivityType.Watching);
         }
 
         private async Task<Task> PurgeGlobalCommands()
         {
-            IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
             logger.LogInformation($"Purging Global Commands");
             await client.Rest.DeleteAllGlobalCommandsAsync();
             return Task.CompletedTask;
         }
 
-        private async Task<Task> PurgeLocalCommands()
+        private async Task RegisterGuildCommands()
         {
-            IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
-            foreach (SocketGuild guild in guilds)
+            foreach (SocketGuild guild in client.Guilds)
             {
-                logger.LogInformation($"Purging Application Commands for {guild.Name} ({guild.Id})...");
-                await guild.DeleteApplicationCommandsAsync();
-                await Task.Delay(500);
-            }
-            return Task.CompletedTask;
-        }
-
-        private async Task<Task> ConfigureLocalCommands()
-        {
-            IReadOnlyCollection<SocketGuild> guilds = client.Guilds;
-            foreach (SocketGuild guild in guilds)
-            {
-                logger.LogInformation($"Adding commands to {guild.Name} ({guild.Id})...");
+                logger.LogInformation($"Registering commands to {guild.Name} ({guild.Id})...");
                 await interactCommands.RegisterCommandsToGuildAsync(guild.Id);
-                await Task.Delay(500);
+                await Task.Delay(500); // Avoid rate limit...
             }
-            return Task.CompletedTask;
-        }
-
-        private async Task<Task> ConfigureGlobalCommands()
-        {
-            logger.LogInformation($"Adding Global Commands");
-            await interactCommands.RegisterCommandsGloballyAsync();
-            return Task.CompletedTask;
         }
 
         // this method switches out the severity level from Discord.Net's API, and logs appropriately
