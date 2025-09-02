@@ -1,127 +1,171 @@
 ﻿using Discord;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using AribethBot.Database;
 
-namespace AribethBot
+namespace AribethBot;
+
+public class SpamTriggerHandler
 {
-    public class SpamTriggerHandler
+    private readonly DiscordSocketClient socketClient;
+    private readonly DatabaseContext db;
+    private readonly ILogger logger;
+
+    private readonly Dictionary<ulong, UserMessageInfo> userMessages = new();
+
+    public SpamTriggerHandler(IServiceProvider services)
     {
-        private readonly DiscordSocketClient socketClient;
+        socketClient = services.GetRequiredService<DiscordSocketClient>();
+        db = services.GetRequiredService<DatabaseContext>();
+        logger = services.GetRequiredService<ILogger<SpamTriggerHandler>>();
 
-        private readonly IConfiguration config;
+        socketClient.MessageReceived += SocketClientOnMessageReceived;
+    }
 
-        // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
-        private readonly ILogger logger;
+    private async Task SocketClientOnMessageReceived(SocketMessage rawMessage)
+    {
+        if (rawMessage is not SocketUserMessage message || message.Source != MessageSource.User)
+            return;
 
-        // Tracks each user's messages
-        private Dictionary<ulong, UserMessageInfo> userMessages = new Dictionary<ulong, UserMessageInfo>();
-
-        public SpamTriggerHandler(IServiceProvider services)
+        if (rawMessage.Channel is SocketGuildChannel guildChannel)
         {
-            socketClient = services.GetRequiredService<DiscordSocketClient>();
-            config = services.GetRequiredService<IConfiguration>();
-            logger = services.GetRequiredService<ILogger<SpamTriggerHandler>>();
-            socketClient.MessageReceived += SocketClientOnMessageReceived;
-        }
+            logger.LogInformation(
+                $"Message written by {message.Author} ({message.Author.Id}) in {rawMessage.Channel.Name} " +
+                $"(Guild: {guildChannel.Guild.Name} [{guildChannel.Guild.Id}]) at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}."
+            );
 
-        private async Task SocketClientOnMessageReceived(SocketMessage rawMessage)
-        {
-            // ensures we don't process system/other bot messages
-            if (rawMessage is not SocketUserMessage message || message.Source != MessageSource.User) return;
-
-            // Load limits from config
-            int classicLimit = config.GetValue<int>("nbMessagesSpamTriggerClassic");
-            double classicInterval = config.GetValue<double>("intervalTimeSpamTriggerClassic");
-            int botLimit = config.GetValue<int>("nbMessagesSpamTriggerBot");
-            double botInterval = config.GetValue<double>("intervalTimeSpamTriggerBot");
-
-            if (rawMessage.Channel is SocketGuildChannel guildChannel)
-            {
-                logger.LogInformation(
-                    $"Message written by {rawMessage.Author} ({rawMessage.Author.Id}) " +
-                    $"in {rawMessage.Channel.Name} (Guild: {guildChannel.Guild.Name} [{guildChannel.Guild.Id}]) " +
-                    $"at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}.");
-            }
-            else
-            {
-                // Fallback for DMs or group chats
-                logger.LogInformation(
-                    $"Message written by {rawMessage.Author} ({rawMessage.Author.Id}) " +
-                    $"in {rawMessage.Channel.Name} (DM / Group Chat) " +
-                    $"at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}.");
-            }
             UserMessageInfo userInfo = userMessages.GetValueOrDefault(message.Author.Id) ?? new UserMessageInfo();
             userMessages[message.Author.Id] = userInfo;
 
-            // Process both classic and bot spam
-            await ProcessSpamCheck(message, userInfo,
-                (userInfo.ClassicMessages, classicLimit, classicInterval, false),
-                (userInfo.BotMessages, botLimit, botInterval, true));
+            // Load guild-specific spam triggers
+            List<SpamTrigger> triggers = db.SpamTriggers
+                .Where(t => t.GuildId == guildChannel.Guild.Id)
+                .ToList();
+
+            foreach (SpamTrigger trigger in triggers)
+            {
+                switch (trigger.Type)
+                {
+                    case SpamType.Classic:
+                        await ProcessSpamCheck(message, userInfo.ClassicMessages, trigger);
+                        break;
+                    case SpamType.Bot:
+                        await ProcessSpamCheck(message, userInfo.BotMessages, trigger);
+                        break;
+                }
+            }
+        }
+        else
+        {
+            logger.LogInformation(
+                $"Message written by {message.Author} ({message.Author.Id}) in {rawMessage.Channel.Name} (DM / Group Chat) at {rawMessage.Timestamp.LocalDateTime:dddd dd MMMM yyyy HH:mm:ss:fff}."
+            );
+        }
+    }
+
+    private async Task ProcessSpamCheck(SocketUserMessage message, MessageTracker tracker, SpamTrigger trigger)
+    {
+        tracker.AddMessage(message); // store actual message
+        tracker.Cleanup(trigger.IntervalTime);
+
+        bool spamDetected = trigger.Type == SpamType.Bot
+            ? tracker.ActiveChannelCount >= trigger.NbMessages
+            : tracker.TotalMessages >= trigger.NbMessages;
+
+        if (!spamDetected) return;
+
+        IGuildUser user = await (message.Channel as IGuild).GetUserAsync(message.Author.Id);
+        if (user != null)
+            await ApplyActionAsync(user, message.Channel as SocketGuild, message.Channel as SocketGuildChannel, trigger, tracker);
+
+        tracker.Clear();
+    }
+
+    private async Task ApplyActionAsync(IGuildUser user, SocketGuild guild, SocketGuildChannel channel, SpamTrigger trigger, MessageTracker tracker)
+    {
+        int duration = trigger.ActionDuration ?? 10;
+        int deletedCount = 0;
+
+        if (trigger.ActionDelete && tracker != null)
+        {
+            List<SocketUserMessage> messagesToDelete = tracker.GetMessagesForSpam()
+                .Where(m => m.Author.Id == user.Id)
+                .ToList();
+
+            foreach (SocketUserMessage msg in messagesToDelete)
+            {
+                await msg.DeleteAsync();
+                deletedCount++;
+            }
         }
 
-        private async Task ProcessSpamCheck(SocketMessage message, UserMessageInfo userInfo,
-            params (MessageTracker tracker, int limit, double interval, bool isBot)[] checks)
+        string deleteText = trigger.ActionDelete ? $" and deleted {deletedCount} message(s)" : "";
+
+        switch (trigger.ActionType)
+        {
+            case SpamAction.Ban:
+                await user.BanAsync(1, $"Aribeth smited the spammer{(trigger.ActionDelete ? " and healed the guild" : "")}");
+                logger.LogInformation($"User {user.Username} ({user.Id}) banned from {guild.Name} ({guild.Id}) for spamming{deleteText}.");
+                break;
+
+            case SpamAction.Kick:
+                await user.KickAsync($"Aribeth blessed the guild and removed the spammer{(trigger.ActionDelete ? " and healed the guild" : "")}");
+                logger.LogInformation($"User {user.Username} ({user.Id}) kicked from {guild.Name} ({guild.Id}) for spamming{deleteText}.");
+                break;
+
+            case SpamAction.Timeout:
+                await user.SetTimeOutAsync(TimeSpan.FromMinutes(duration),
+                    new RequestOptions { AuditLogReason = $"Aribeth protected{(trigger.ActionDelete ? " and healed the guild" : " the guild")}" });
+                logger.LogInformation($"User {user.Username} ({user.Id}) timed out in {guild.Name} ({guild.Id}) for spamming{deleteText}.");
+                break;
+            
+            case SpamAction.NoAction:
+                logger.LogInformation($"Aribeth saw a troublemaker {user.Username} ({user.Id}) in {guild.Name}, but she'll allow it.");
+                break;
+
+            default:
+                logger.LogWarning($"Aribeth is confused and doesn't know how to act '{trigger.ActionType}' for user {user.Username} ({user.Id}) in {guild.Name} ({guild.Id}).");
+                break;
+        }
+    }
+
+    public class UserMessageInfo
+    {
+        public MessageTracker ClassicMessages { get; } = new();
+        public MessageTracker BotMessages { get; } = new();
+
+        public void Clear()
+        {
+            ClassicMessages.Clear();
+            BotMessages.Clear();
+        }
+    }
+
+    public class MessageTracker
+    {
+        private readonly Dictionary<ulong, List<SocketUserMessage>> messagesPerChannel = new();
+
+        public void AddMessage(SocketUserMessage message)
+        {
+            if (!messagesPerChannel.ContainsKey(message.Channel.Id))
+                messagesPerChannel[message.Channel.Id] = new List<SocketUserMessage>();
+            messagesPerChannel[message.Channel.Id].Add(message);
+        }
+
+        public void Cleanup(double intervalSeconds)
         {
             DateTime now = DateTime.UtcNow;
-
-            foreach ((MessageTracker tracker, int limit, double interval, bool isBot) in checks)
-            {
-                tracker.AddMessage(message.Channel.Id, now);
-                tracker.Cleanup(now, interval);
-
-                bool spamDetected = isBot
-                    ? tracker.ActiveChannelCount >= limit // classic = messages in same channel
-                    : tracker.TotalMessages >= limit; // bot = messages across multiple channels
-
-                if (!spamDetected) continue;
-
-                if (message.Channel is SocketGuildChannel guildChannel)
-                {
-                    await guildChannel.GetUser(message.Author.Id)
-                        .BanAsync(1, "Aribeth smited the spammer", RequestOptions.Default);
-                    logger.LogInformation($"User {message.Author} ({message.Author.Id}) banned from {guildChannel.Guild.Name} ({guildChannel.Guild.Id}) for spamming.");
-                }
-
-                userInfo.Clear();
-                break;
-            }
+            foreach (List<SocketUserMessage> list in messagesPerChannel.Values)
+                list.RemoveAll(m => (now - m.Timestamp.UtcDateTime).TotalSeconds > intervalSeconds);
         }
 
-        public class UserMessageInfo
-        {
-            public MessageTracker ClassicMessages { get; private set; } = new();
-            public MessageTracker BotMessages { get; private set; } = new();
+        public List<SocketUserMessage> GetMessagesForSpam() =>
+            messagesPerChannel.Values.SelectMany(l => l).ToList();
 
-            public void Clear()
-            {
-                ClassicMessages.Clear();
-                BotMessages.Clear();
-            }
-        }
+        public int TotalMessages => messagesPerChannel.Values.Sum(l => l.Count);
+        public int ActiveChannelCount => messagesPerChannel.Count(kv => kv.Value.Count > 0);
 
-        public class MessageTracker
-        {
-            private readonly Dictionary<ulong, List<DateTime>> messagesPerChannel = new();
-
-            public void AddMessage(ulong channelId, DateTime timestamp)
-            {
-                if (!messagesPerChannel.ContainsKey(channelId))
-                    messagesPerChannel[channelId] = new List<DateTime>();
-                messagesPerChannel[channelId].Add(timestamp);
-            }
-
-            public void Cleanup(DateTime now, double interval)
-            {
-                foreach (List<DateTime> list in messagesPerChannel.Values)
-                    list.RemoveAll(t => (now - t).TotalSeconds > interval);
-            }
-
-            public int TotalMessages => messagesPerChannel.Values.Sum(list => list.Count);
-            public int ActiveChannelCount => messagesPerChannel.Count(kv => kv.Value.Count > 0);
-
-            public void Clear() => messagesPerChannel.Clear();
-        }
+        public void Clear() => messagesPerChannel.Clear();
     }
 }

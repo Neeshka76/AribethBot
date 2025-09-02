@@ -9,17 +9,20 @@ using Microsoft.Extensions.Logging;
 namespace AribethBot.Admin;
 
 [RequireOwner]
-public class HostingAdminCommands : InteractionModuleBase<SocketInteractionContext>
+[Group("bot_owner", "Commands related to bot management")]
+public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
 {
     // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
     private readonly ILogger logger;
+    private const string LogFolder = "Logs"; // relative to bot executable
+    private const int MaxButtons = 8; // max log files to show as buttons
 
     // constructor injection is also a valid way to access the dependencies
-    public HostingAdminCommands(ServiceHandler handler)
+    public BotOwnerCommands(ServiceHandler handler)
     {
         logger = handler.Logger;
     }
-    
+
     [SlashCommand("adminpi", "Show admin actions for the Raspberry Pi.")]
     public async Task AdminPiAsync()
     {
@@ -131,7 +134,10 @@ public class HostingAdminCommands : InteractionModuleBase<SocketInteractionConte
             if (int.TryParse(tempRaw, out int millidegrees))
                 return $"{millidegrees / 1000.0:F1} °C";
         }
-        catch { }
+        catch
+        {
+        }
+
         return "N/A";
     }
 
@@ -143,7 +149,10 @@ public class HostingAdminCommands : InteractionModuleBase<SocketInteractionConte
             if (double.TryParse(result.Trim().Replace(',', '.'), out double usage))
                 return $"{usage:F1}%";
         }
-        catch { }
+        catch
+        {
+        }
+
         return "N/A";
     }
 
@@ -168,6 +177,7 @@ public class HostingAdminCommands : InteractionModuleBase<SocketInteractionConte
             memoryFormatted.AppendLine($"Buff/Cache : {memValues[5]}");
             memoryFormatted.AppendLine($"Available  : {memValues[6]}");
         }
+
         if (memLines.Length >= 3)
         {
             string[] swapValues = memLines[2].Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -234,6 +244,7 @@ public class HostingAdminCommands : InteractionModuleBase<SocketInteractionConte
                 string value = i < row.Length ? row[i] : "";
                 sb.Append(i < 2 ? value.PadRight(colWidths[i] + 1) : value.PadLeft(colWidths[i] + 1));
             }
+
             sb.AppendLine();
         }
 
@@ -258,5 +269,70 @@ public class HostingAdminCommands : InteractionModuleBase<SocketInteractionConte
             embeds.Add(builder.Build());
 
         return embeds;
+    }
+
+    [SlashCommand("botlogs", "Download recent log files ephemerally.")]
+    public async Task BotLogsAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (!Directory.Exists(LogFolder))
+        {
+            await FollowupAsync("No log folder found.", ephemeral: true);
+            return;
+        }
+
+        List<string> logFiles = Directory.GetFiles(LogFolder, "*.log")
+            .OrderByDescending(File.GetCreationTime)
+            .Take(MaxButtons)
+            .ToList();
+
+        if (!logFiles.Any())
+        {
+            await FollowupAsync("No log files found.", ephemeral: true);
+            return;
+        }
+
+        // Create buttons for each log file
+        ComponentBuilder builder = new ComponentBuilder();
+        foreach (string file in logFiles)
+        {
+            string fileName = Path.GetFileName(file);
+            builder.WithButton(fileName, $"log_{fileName}", ButtonStyle.Primary);
+        }
+
+        IUserMessage? message = await FollowupAsync("Select a log file to download:", components: builder.Build(), ephemeral: true);
+
+        async Task Handler(SocketMessageComponent component)
+        {
+            if (component.Message.Id != message.Id) return;
+
+            if (component.User.Id != Context.User.Id)
+            {
+                await component.RespondAsync("You cannot use this.", ephemeral: true);
+                return;
+            }
+
+            string selectedFile = component.Data.CustomId.Replace("log_", "");
+            string filePath = Path.Combine(LogFolder, selectedFile);
+
+            if (!File.Exists(filePath))
+            {
+                await component.RespondAsync($"File `{selectedFile}` not found.", ephemeral: true);
+                return;
+            }
+
+            await component.RespondWithFileAsync(filePath, ephemeral: true);
+        }
+
+        Context.Client.ButtonExecuted += Handler;
+
+        // Auto disable buttons after 5 minutes
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMinutes(5));
+            Context.Client.ButtonExecuted -= Handler;
+            await message.ModifyAsync(m => m.Components = new ComponentBuilder().Build());
+        });
     }
 }

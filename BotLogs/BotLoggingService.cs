@@ -1,12 +1,12 @@
-﻿using Discord;
+﻿using AribethBot.Database;
+using AribethBot.Helpers;
+using Discord;
 using Discord.Interactions;
 using Discord.Commands;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace AribethBot
 {
@@ -17,23 +17,23 @@ namespace AribethBot
         private readonly DiscordSocketClient client;
         private readonly CommandService commands;
         private readonly InteractionService interactCommands;
-        private readonly IConfiguration config;
+        private readonly DatabaseContext db;
+        private readonly IServiceProvider services;
 
         public BotLoggingService(IServiceProvider services)
         {
+            this.services = services;
             // get the services we need via DI, and assign the fields declared above to them
             client = services.GetRequiredService<DiscordSocketClient>();
             commands = services.GetRequiredService<CommandService>();
             logger = services.GetRequiredService<ILogger<BotLoggingService>>();
             interactCommands = services.GetRequiredService<InteractionService>();
-            config = services.GetRequiredService<IConfiguration>();
+            db = services.GetRequiredService<DatabaseContext>();
             // hook into these events with the methods provided below
             client.Ready += OnReadyAsync;
+            client.JoinedGuild += OnJoinedGuildAsync;
             client.Log += OnLogAsync;
             commands.Log += OnLogAsync;
-            
-            // when bot joins new guilds
-            client.JoinedGuild += OnJoinedGuildAsync;
         }
 
         // this method executes on the bot being connected/ready
@@ -45,6 +45,10 @@ namespace AribethBot
             {
                 logger.LogInformation($"\t- {guild.Name} ({guild.Id})");
             }
+            
+            // Initialize DB AFTER bot is ready
+            await InitializeDatabaseAsync();
+            
             _ = Task.Run(async () =>
             {
                 try
@@ -70,12 +74,46 @@ namespace AribethBot
             
             await client.SetGameAsync("over Neverwinter", type: ActivityType.Watching);
         }
+        
+        private async Task OnJoinedGuildAsync(SocketGuild guild)
+        {
+            // Ensure newly joined guild is in DB
+            using IServiceScope scope = services.CreateScope();
+            DatabaseContext db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
+            await GuildHelper.EnsureGuildInDbAsync(guild, db, logger);
+            logger.LogInformation($"Joined new guild: {guild.Name} ({guild.Id})");
+        }
+        
+        private async Task InitializeDatabaseAsync()
+        {
+            // Apply automatic migrations for the DB
+            using IServiceScope scope = services.CreateScope();
+            DatabaseContext db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
 
-        private async Task<Task> PurgeGlobalCommands()
+            logger.LogInformation("Checking for pending migrations...");
+            IEnumerable<string> pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+
+            if (pendingMigrations.Any())
+            {
+                logger.LogInformation("Applying {Count} pending migration(s)...", pendingMigrations.Count());
+                await db.Database.MigrateAsync();
+                logger.LogInformation("Migrations applied successfully.");
+            }
+            else
+            {
+                logger.LogInformation("No pending migrations found. Database is up to date.");
+            }
+
+            foreach (SocketGuild guild in client.Guilds)
+            {
+                await GuildHelper.EnsureGuildInDbAsync(guild, db, logger);
+            }
+        }
+
+        private async Task PurgeGlobalCommands()
         {
             logger.LogInformation($"Purging Global Commands");
             await client.Rest.DeleteAllGlobalCommandsAsync();
-            return Task.CompletedTask;
         }
 
         private async Task RegisterGuildCommands()
@@ -94,83 +132,14 @@ namespace AribethBot
             string logText = $"{msg.Source}: {msg.Exception?.ToString() ?? msg.Message}";
             switch (msg.Severity.ToString())
             {
-                case "Critical":
-                {
-                    logger.LogCritical(logText);
-                    break;
-                }
-                case "Warning":
-                {
-                    logger.LogWarning(logText);
-                    break;
-                }
-                case "Info":
-                {
-                    logger.LogInformation(logText);
-                    break;
-                }
-                case "Verbose":
-                {
-                    logger.LogInformation(logText);
-                    break;
-                }
-                case "Debug":
-                {
-                    logger.LogDebug(logText);
-                    break;
-                }
-                case "Error":
-                {
-                    logger.LogError(logText);
-                    break;
-                }
+                case "Critical": logger.LogCritical(logText); break;
+                case "Warning": logger.LogWarning(logText); break;
+                case "Info": logger.LogInformation(logText); break;
+                case "Verbose": logger.LogInformation(logText); break;
+                case "Debug": logger.LogDebug(logText); break;
+                case "Error": logger.LogError(logText); break;
             }
             return Task.CompletedTask;
-        }
-        
-        private async Task OnJoinedGuildAsync(SocketGuild guild)
-        {
-            logger.LogInformation($"Joined new guild: {guild.Name} ({guild.Id})");
-            await EnsureGuildConfigExists(guild);
-        }
-        
-        private async Task EnsureGuildConfigExists(SocketGuild guild)
-        {
-            string filePath = Path.Combine(AppContext.BaseDirectory, "config.json");
-            string json = await File.ReadAllTextAsync(filePath);
-
-            // Use JObject for safe manipulation
-            JObject jsonObj = JObject.Parse(json);
-
-            string guildId = guild.Id.ToString();
-
-            // Ensure "guilds" section exists
-            jsonObj["guilds"] ??= new JObject();
-
-            // Check if this guild exists
-            if (jsonObj["guilds"][guildId] == null)
-            {
-                // Use JObject.FromObject to safely convert the anonymous type
-                JObject guildConfig = JObject.FromObject(new
-                {
-                    channelDeletedLog = "0",
-                    channelEditedLog = "0",
-                    channelEntryOutLog = "0",
-                    channelBanLog = "0",
-                    channelVoiceActivityLog = "0"
-                });
-
-                // Assign it directly to the guild key
-                jsonObj["guilds"][guildId] = guildConfig;
-
-                // Save changes
-                await File.WriteAllTextAsync(filePath, JsonConvert.SerializeObject(jsonObj, Formatting.Indented));
-                logger.LogInformation($"Created default config for guild {guild.Name} ({guild.Id})");
-            }
-            else
-            {
-                logger.LogInformation($"Config already exists for guild {guild.Name} ({guild.Id})");
-            }
         }
 
         static bool IsDebug()
