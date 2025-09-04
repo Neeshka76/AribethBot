@@ -74,15 +74,15 @@ public class SpamTriggerHandler
             : tracker.TotalMessages >= trigger.NbMessages;
 
         if (!spamDetected) return;
-
-        IGuildUser user = await (message.Channel as IGuild).GetUserAsync(message.Author.Id);
+        if (message.Channel is not SocketGuildChannel guildChannel) return;
+        SocketGuildUser user = guildChannel.Guild.GetUser(message.Author.Id);
         if (user != null)
-            await ApplyActionAsync(user, message.Channel as SocketGuild, message.Channel as SocketGuildChannel, trigger, tracker);
+            await ApplyActionAsync(user, guildChannel.Guild, guildChannel, trigger, tracker);
 
         tracker.Clear();
     }
 
-    private async Task ApplyActionAsync(IGuildUser user, SocketGuild guild, SocketGuildChannel channel, SpamTrigger trigger, MessageTracker tracker)
+    private async Task ApplyActionAsync(SocketGuildUser user, SocketGuild guild, SocketGuildChannel channel, SpamTrigger trigger, MessageTracker tracker)
     {
         int duration = trigger.ActionDuration ?? 10;
         int deletedCount = 0;
@@ -119,7 +119,7 @@ public class SpamTriggerHandler
                     new RequestOptions { AuditLogReason = $"Aribeth protected{(trigger.ActionDelete ? " and healed the guild" : " the guild")}" });
                 logger.LogInformation($"User {user.Username} ({user.Id}) timed out in {guild.Name} ({guild.Id}) for spamming{deleteText}.");
                 break;
-            
+
             case SpamAction.NoAction:
                 logger.LogInformation($"Aribeth saw a troublemaker {user.Username} ({user.Id}) in {guild.Name}, but she'll allow it.");
                 break;
