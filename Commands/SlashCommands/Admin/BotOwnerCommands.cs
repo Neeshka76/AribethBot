@@ -16,6 +16,7 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
     private readonly ILogger logger;
     private const string LogFolder = "Logs"; // relative to bot executable
     private const int MaxButtons = 8; // max log files to show as buttons
+    private const int NumberOfLogToFetch = 31; // number of logs to fetch
 
     // constructor injection is also a valid way to access the dependencies
     public BotOwnerCommands(ServiceHandler handler)
@@ -29,8 +30,8 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
         await DeferAsync(ephemeral: true);
 
         MessageComponent components = new ComponentBuilder()
-            .WithButton("Stats", "adminpi_stats", ButtonStyle.Primary)
-            .WithButton("Restart Bot", "adminpi_restart", ButtonStyle.Primary)
+            .WithButton("Stats", "adminpi_stats")
+            .WithButton("Restart Bot", "adminpi_restart")
             .WithButton("Reboot Pi", "adminpi_reboot", ButtonStyle.Danger)
             .WithButton("Update Pi", "adminpi_update", ButtonStyle.Secondary)
             .Build();
@@ -136,6 +137,7 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
         }
         catch
         {
+            // ignored
         }
 
         return "N/A";
@@ -151,6 +153,7 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
         }
         catch
         {
+            // ignored
         }
 
         return "N/A";
@@ -258,7 +261,7 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
 
         foreach ((string name, string value) in fields)
         {
-            builder.AddField(name, value, false);
+            builder.AddField(name, value);
 
             if (builder.Fields.Sum(f => f.Value.ToString().Length) <= 4000) continue;
             embeds.Add(builder.Build());
@@ -284,7 +287,7 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
 
         List<string> logFiles = Directory.GetFiles(LogFolder, "*.log")
             .OrderByDescending(File.GetCreationTime)
-            .Take(MaxButtons)
+            .Take(NumberOfLogToFetch)
             .ToList();
 
         if (!logFiles.Any())
@@ -293,41 +296,96 @@ public class BotOwnerCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        // Create buttons for each log file
-        ComponentBuilder builder = new ComponentBuilder();
-        foreach (string file in logFiles)
+        int currentPage = 0;
+        int totalPages = (int)Math.Ceiling(logFiles.Count / (double)MaxButtons);
+
+        // Build buttons for a specific page
+        MessageComponent BuildButtons(int page)
         {
-            string fileName = Path.GetFileName(file);
-            builder.WithButton(fileName, $"log_{fileName}", ButtonStyle.Primary);
+            ComponentBuilder builder = new ComponentBuilder();
+
+            foreach (string file in logFiles.Skip(page * MaxButtons).Take(MaxButtons))
+            {
+                string fileName = Path.GetFileName(file);
+                string buttonId = $"log_{Uri.EscapeDataString(fileName)}"; // Safe ID
+                builder.WithButton(fileName, buttonId, ButtonStyle.Primary);
+            }
+
+            // Pagination buttons
+            builder.WithButton("⏮️ Prev", "logs_prev", disabled: page == 0);
+            builder.WithButton("⏭️ Next", "logs_next", disabled: page == totalPages - 1);
+
+            return builder.Build();
         }
 
-        IUserMessage? message = await FollowupAsync("Select a log file to download:", components: builder.Build(), ephemeral: true);
+        IUserMessage message = await FollowupAsync(
+            $"Showing logs page {currentPage + 1}/{totalPages}:",
+            components: BuildButtons(currentPage),
+            ephemeral: true
+        );
 
         async Task Handler(SocketMessageComponent component)
         {
             if (component.Message.Id != message.Id) return;
-
             if (component.User.Id != Context.User.Id)
             {
-                await component.RespondAsync("You cannot use this.", ephemeral: true);
+                await component.FollowupAsync("You cannot use this.", ephemeral: true);
                 return;
             }
 
-            string selectedFile = component.Data.CustomId.Replace("log_", "");
-            string filePath = Path.Combine(LogFolder, selectedFile);
-
-            if (!File.Exists(filePath))
+            try
             {
-                await component.RespondAsync($"File `{selectedFile}` not found.", ephemeral: true);
-                return;
-            }
+                switch (component.Data.CustomId)
+                {
+                    case "logs_prev":
+                        currentPage = Math.Max(currentPage - 1, 0);
+                        await component.UpdateAsync(msg =>
+                        {
+                            msg.Content = $"Showing logs page {currentPage + 1}/{totalPages}:";
+                            msg.Components = BuildButtons(currentPage);
+                        });
+                        return;
 
-            await component.RespondWithFileAsync(filePath, ephemeral: true);
+                    case "logs_next":
+                        currentPage = Math.Min(currentPage + 1, totalPages - 1);
+                        await component.UpdateAsync(msg =>
+                        {
+                            msg.Content = $"Showing logs page {currentPage + 1}/{totalPages}:";
+                            msg.Components = BuildButtons(currentPage);
+                        });
+                        return;
+
+                    default:
+                        // File button
+                        string selectedFile = Uri.UnescapeDataString(component.Data.CustomId.Replace("log_", ""));
+                        string filePath = Path.Combine(LogFolder, selectedFile);
+
+                        if (!File.Exists(filePath))
+                        {
+                            await component.FollowupAsync($"File `{selectedFile}` not found.", ephemeral: true);
+                            return;
+                        }
+
+                        // Update the same ephemeral message with the file sent
+                        await component.UpdateAsync(msg =>
+                        {
+                            msg.Content = $"Downloading `{selectedFile}`...";
+                            msg.Components = BuildButtons(currentPage);
+                        });
+
+                        await component.FollowupWithFileAsync(filePath, ephemeral: true);
+                        return;
+                }
+            }
+            catch
+            {
+                // Ignore individual errors
+            }
         }
 
         Context.Client.ButtonExecuted += Handler;
 
-        // Auto disable buttons after 5 minutes
+        // Auto-disable buttons after 5 minutes
         _ = Task.Run(async () =>
         {
             await Task.Delay(TimeSpan.FromMinutes(5));

@@ -3,28 +3,235 @@ using AribethBot.Database;
 using AribethBot.Helpers;
 using Discord;
 using Discord.Interactions;
+using Discord.Rest;
 using Discord.WebSocket;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AribethBot;
+
 [Group("guild", "Commands related to guilds/servers")]
 public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly DatabaseContext db;
     private readonly ILogger<GuildCommands> logger;
-    public GuildCommands(DatabaseContext db, ILogger<GuildCommands> logger)
+    private readonly IServiceProvider services;
+
+    public GuildCommands(DatabaseContext db, ILogger<GuildCommands> logger, IServiceProvider services)
     {
         this.db = db;
         this.logger = logger;
+        this.services = services;
     }
-    
+
+
+    [SlashCommand("manage_users", "View and manage special user categories")]
+    [RequireUserPermission(GuildPermission.Administrator)]
+    public async Task ManageUsersCommand()
+    {
+        await DeferAsync(ephemeral: true);
+
+        // Main buttons to select user category
+        MessageComponent categoryButtons = new ComponentBuilder()
+            .WithButton("Pending Users", "select_pending")
+            .WithButton("Users Without Roles", "select_no_roles", ButtonStyle.Secondary)
+            .Build();
+
+        IUserMessage mainMessage = await FollowupAsync(
+            "Select which type of users to manage:",
+            components: categoryButtons,
+            ephemeral: true
+        );
+
+        async Task CategoryHandler(SocketMessageComponent categoryEvent)
+        {
+            if (categoryEvent.Message.Id != mainMessage.Id) return;
+            if (categoryEvent.User.Id != Context.User.Id)
+            {
+                await categoryEvent.RespondAsync("You cannot use this menu.", ephemeral: true);
+                return;
+            }
+
+            List<SocketGuildUser> targetUsers;
+            string title, reasonPrefix;
+
+            switch (categoryEvent.Data.CustomId)
+            {
+                case "select_pending":
+                    targetUsers = Context.Guild.Users.Where(u => (bool)u.IsPending).ToList();
+                    title = "Pending Users";
+                    reasonPrefix = "Pending screening";
+                    break;
+
+                case "select_no_roles":
+                    targetUsers = Context.Guild.Users.Where(u => u.Roles.Count == 1).ToList();
+                    title = "Users Without Roles";
+                    reasonPrefix = "No roles";
+                    break;
+
+                default:
+                    return;
+            }
+
+            if (!targetUsers.Any())
+            {
+                await categoryEvent.UpdateAsync(msg =>
+                {
+                    msg.Content = $"No users found for {title}.";
+                    msg.Components = new ComponentBuilder().Build();
+                });
+                return;
+            }
+
+            // Build paginated embeds for display
+            List<(string Name, string Value, bool Inline)> fields = new();
+            int chunkSize = 10;
+            for (int i = 0; i < targetUsers.Count; i += chunkSize)
+            {
+                IEnumerable<string> chunk = targetUsers.Skip(i).Take(chunkSize).Select(u => u.Mention);
+                fields.Add(($"Users {i + 1}-{i + chunk.Count()}", string.Join("\n", chunk), false));
+            }
+
+            List<Embed> pages = await BuildEmbedsFromFields(fields, title);
+            int currentPage = 0;
+
+            Embed AddPageFooter(Embed embed)
+            {
+                EmbedBuilder builder = new EmbedBuilder()
+                    .WithTitle(embed.Title)
+                    .WithDescription(embed.Description)
+                    .WithColor(embed.Color ?? Color.Default)
+                    .WithFooter($"Page {currentPage + 1}/{pages.Count}");
+
+                if (embed.Timestamp.HasValue) builder.WithTimestamp(embed.Timestamp.Value);
+                if (embed.Author != null) builder.WithAuthor(embed.Author.Value.Name, embed.Author.Value.IconUrl, embed.Author.Value.Url);
+                foreach (EmbedField field in embed.Fields) builder.AddField(field.Name, field.Value, field.Inline);
+
+                return builder.Build();
+            }
+
+            // Buttons for pagination and actions
+            MessageComponent BuildComponents()
+            {
+                return new ComponentBuilder()
+                    .WithButton("⏮️ Prev", "paginator_prev", disabled: currentPage == 0)
+                    .WithButton("⏭️ Next", "paginator_next", disabled: currentPage == pages.Count - 1)
+                    .WithButton("Ban All", "ban_all", ButtonStyle.Danger)
+                    .WithButton("Kick All", "kick_all")
+                    .Build();
+            }
+
+            await categoryEvent.UpdateAsync(msg =>
+            {
+                msg.Content = null;
+                msg.Embed = AddPageFooter(pages[currentPage]);
+                msg.Components = BuildComponents();
+            });
+
+            async Task ActionHandler(SocketMessageComponent actionEvent)
+            {
+                if (actionEvent.Message.Id != mainMessage.Id) return;
+                if (actionEvent.User.Id != Context.User.Id)
+                {
+                    await actionEvent.RespondAsync("You cannot control this paginator.", ephemeral: true);
+                    return;
+                }
+
+                switch (actionEvent.Data.CustomId)
+                {
+                    case "paginator_prev":
+                        currentPage = Math.Max(currentPage - 1, 0);
+                        break;
+                    case "paginator_next":
+                        currentPage = Math.Min(currentPage + 1, pages.Count - 1);
+                        break;
+
+                    case "ban_all":
+                    case "kick_all":
+                        
+                        // Defer immediately
+                        await actionEvent.DeferAsync(ephemeral: true);
+                        // Create new ephemeral message for processing progress
+                        RestFollowupMessage progressMessage = await actionEvent.FollowupAsync(
+                            $"Starting {(actionEvent.Data.CustomId == "ban_all" ? "ban" : "kick")} for {targetUsers.Count} users...",
+                            ephemeral: true
+                        );
+
+                        int total = targetUsers.Count;
+                        int processed = 0;
+                        int batchSize = 5;
+
+                        foreach (SocketGuildUser user in targetUsers)
+                        {
+                            try
+                            {
+                                if (actionEvent.Data.CustomId == "ban_all")
+                                    await Context.Guild.AddBanAsync(user, 0, $"{reasonPrefix} ban");
+                                else
+                                    await user.KickAsync($"{reasonPrefix} kick");
+                            }
+                            catch
+                            {
+                                // ignore individual errors
+                            }
+
+                            processed++;
+
+                            if (processed % batchSize == 0 || processed == total)
+                            {
+                                double percent = (processed * 100.0) / total;
+                                await progressMessage.ModifyAsync(msg =>
+                                    msg.Content = $"Processing {(actionEvent.Data.CustomId == "ban_all" ? "ban" : "kick")}: {processed}/{total} users ({percent:0.0}%)");
+                            }
+
+                            await Task.Delay(1000); // optional delay
+                        }
+
+                        await progressMessage.ModifyAsync(msg =>
+                            msg.Content = $"All {total} users have been {(actionEvent.Data.CustomId == "ban_all" ? "banned" : "kicked")}!");
+                        return;
+                }
+
+                // Update pagination embeds
+                await actionEvent.UpdateAsync(msg =>
+                {
+                    msg.Embed = AddPageFooter(pages[currentPage]);
+                    msg.Components = BuildComponents();
+                });
+            }
+
+            Context.Client.ButtonExecuted += ActionHandler;
+
+            // Auto-remove handler after 5 minutes
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromMinutes(5));
+                Context.Client.ButtonExecuted -= ActionHandler;
+            });
+        }
+
+        Context.Client.ButtonExecuted += CategoryHandler;
+
+        // Auto-remove main handler after 5 minutes
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMinutes(5));
+            Context.Client.ButtonExecuted -= CategoryHandler;
+            await mainMessage.ModifyAsync(m => m.Components = new ComponentBuilder().Build());
+        });
+    }
+
+
     [SlashCommand("setspamaction", "Set the spam action for this guild")]
     [RequireUserPermission(GuildPermission.Administrator)]
     public async Task SetSpamAction(
         [Summary("type", "classic or bot")] SpamType type,
-        [Summary("action", "timeout, kick, ban")] SpamAction actionType,
-        [Summary("duration", "duration for timeout in minutes")] int duration = 10,
-        [Summary("deleteMessages", "delete messages?")] bool deleteMessages = false)
+        [Summary("action", "timeout, kick, ban")]
+        SpamAction actionType,
+        [Summary("deleteMessages", "delete messages?")]
+        bool deleteMessages = false,
+        [Summary("duration", "duration for timeout in minutes")]
+        int? duration = 10)
     {
         ulong guildId = Context.Guild.Id;
         SpamTrigger? trigger = await db.SpamTriggers.FindAsync(guildId, type);
@@ -64,15 +271,17 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
         await RespondAsync(embed: embed.Build());
     }
-    
+
     [SlashCommand("setspamtrigger", "Set spam trigger threshold for this guild")]
     public async Task SetSpamTrigger(
         [Summary("type", "classic or bot")] SpamType type,
-        [Summary("messages", "Number of messages to trigger spam")] int nbMessages,
-        [Summary("interval", "Time interval in seconds to count messages")] double intervalSeconds)
+        [Summary("messages", "Number of messages to trigger spam")]
+        int nbMessages,
+        [Summary("interval", "Time interval in seconds to count messages")]
+        double intervalSeconds)
     {
         ulong guildId = Context.Guild.Id;
-        
+
         SpamTrigger? trigger = await db.SpamTriggers.FindAsync(guildId, type);
 
         if (trigger == null)
@@ -156,6 +365,9 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         await db.SaveChangesAsync();
+        // Refresh cache in ServerLogger
+        ServerLogger loggerService = services.GetRequiredService<ServerLogger>();
+        await loggerService.RefreshGuildCacheAsync(dbGuild);
         string response = channel == null
             ? $"Disabled `{type}` logging for this guild."
             : $"Updated `{type}` log channel to {channel.Mention} for this guild.";
@@ -268,7 +480,6 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
     private static Task<List<Embed>> BuildEmbedsFromFields(List<(string Name, string Value, bool Inline)> fields, string title)
     {
-        const int MaxEmbedFieldLength = 1024;
         const int MaxEmbedTotalLength = 6000;
 
         List<Embed> embeds = new List<Embed>();
@@ -277,36 +488,22 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
         foreach ((string Name, string Value, bool Inline) field in fields)
         {
-            string remaining = field.Value;
-            int chunkIndex = 0;
+            int fieldLength = field.Name.Length + field.Value.Length;
 
-            while (remaining.Length > MaxEmbedFieldLength)
+            // If adding this field would exceed the total embed limit, start a new embed
+            if (currentLength + fieldLength > MaxEmbedTotalLength)
             {
-                string chunk = remaining.Substring(0, MaxEmbedFieldLength);
-                builder.AddField(field.Name + (chunkIndex > 0 ? $" (cont.)" : ""), chunk, field.Inline);
                 embeds.Add(builder.Build());
-
-                remaining = remaining.Substring(MaxEmbedFieldLength);
                 builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
-                chunkIndex++;
+                currentLength = 0;
             }
 
-            if (!string.IsNullOrEmpty(remaining))
-            {
-                builder.AddField(field.Name + (chunkIndex > 0 ? $" (cont.)" : ""), remaining, field.Inline);
-                currentLength += remaining.Length;
-            }
-
-            if (currentLength <= MaxEmbedTotalLength) continue;
-            embeds.Add(builder.Build());
-            builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
-            currentLength = 0;
+            builder.AddField(field.Name, field.Value, field.Inline);
+            currentLength += fieldLength;
         }
 
         if (builder.Fields.Count > 0)
-        {
             embeds.Add(builder.Build());
-        }
 
         return Task.FromResult(embeds);
     }
@@ -318,17 +515,12 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         SocketGuildUser contextUser = Context.User as SocketGuildUser;
         user ??= contextUser;
         EmbedBuilder embedBuilder = new EmbedBuilder();
-        //    .WithAuthor(guildUser.ToString(), guildUser.GetAvatarUrl() ?? guildUser.GetDefaultAvatarUrl())
-        //    .WithTitle("Roles")
-        //    .WithDescription(roleList)
-        //    .WithColor(Color.Green)
-        //    .WithCurrentTimestamp();
         string userName = user.Username;
         embedBuilder.WithAuthor(userName);
         embedBuilder.Title = "User Stats";
         embedBuilder.Description = $"Stats of {user.Mention}";
         embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Red;
+        embedBuilder.Color = Color.Green;
         EmbedFieldBuilder userFieldBuilder = new EmbedFieldBuilder
         {
             Name = "User",
@@ -376,135 +568,27 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                         break;
                 }
             }
+        }
 
-            userFieldBuilder.Value += $"\n" +
-                                      $"Roles ({user.Roles.Count}) :" +
-                                      $"\n";
-            foreach (SocketRole socketRole in user.Roles.OrderByDescending(x => x.Position))
-            {
-                if (socketRole.IsEveryone) continue;
-                userFieldBuilder.Value += $"- {socketRole}";
-                if (socketRole.IsMentionable)
-                    userFieldBuilder.Value += " (***@***)";
-                userFieldBuilder.Value += "\n";
-            }
+        List<SocketRole> roles = user.Roles
+            .Where(r => !r.IsEveryone) // exclude @everyone
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        userFieldBuilder.Value += $"\n" +
+                                  $"Roles ({roles.Count}) :" +
+                                  $"\n";
+        foreach (SocketRole socketRole in roles)
+        {
+            if (socketRole.IsEveryone) continue;
+            userFieldBuilder.Value += $"- {socketRole}";
+            if (socketRole.IsMentionable)
+                userFieldBuilder.Value += " (***@***)";
+            userFieldBuilder.Value += "\n";
         }
 
         userFieldBuilder.IsInline = true;
         embedBuilder.AddField(userFieldBuilder);
         await FollowupAsync(embed: embedBuilder.Build());
-    }
-
-    //[RequireBotPermission(GuildPermission.BanMembers)]
-    //[SlashCommand("ban", "ban users")]
-    //public async Task BanMember([Summary("User", "User to ban")] SocketUser user)
-    //{
-    //    await DeferAsync();
-    //    if (user == null)
-    //    {
-    //        await FollowupAsync("Need a user !");
-    //        return;
-    //    }
-    //    await FollowupAsync($"{user.GlobalName} has been banned !");
-    //    await Context.Guild.AddBanAsync(user.Id);
-    //    await Task.CompletedTask;
-    //}
-    //
-    //[RequireBotPermission(GuildPermission.BanMembers)]
-    //[SlashCommand("banid", "ban users with id")]
-    //public async Task BanMember([Summary("UserId", "User to ban")] ulong userId)
-    //{
-    //    await DeferAsync();
-    //    IUser user = await Context.Client.GetUserAsync(userId);
-    //    if (user == null)
-    //    {
-    //        await FollowupAsync($"Unknown user");
-    //        return;
-    //    }
-    //    else
-    //    {
-    //        await FollowupAsync($"{user.Username} has been banned !");
-    //        await Context.Guild.AddBanAsync(userId);
-    //    }
-    //    await Task.CompletedTask;
-    //}
-
-    //[RequireOwner()]
-    //[SlashCommand("assignrole", "Assign roles to users")]
-    public async Task AssignRole([Summary("Value", "value to start from")] int value)
-    {
-        await DeferAsync(true);
-        _ = GiveRole(value);
-        await FollowupAsync("Done !");
-    }
-
-    private async Task GiveRole(int value)
-    {
-        int i = 0;
-        foreach (SocketGuildUser user in Context.Guild.Users)
-        {
-            if (i < value)
-            {
-                i++;
-                continue;
-            }
-
-            bool hasPCVR = false;
-            bool hasNomad = false;
-            bool hasBetaPCVR = false;
-            bool hasBetaNomad = false;
-            ulong rolePCVR = 1000460998693625986;
-            ulong roleNomad = 1000461086648176802;
-            ulong roleBetaPCVR = 980767452487106601;
-            ulong roleBetaNomad = 1189150798060462121;
-            foreach (SocketRole role in user.Roles)
-            {
-                // PCVR
-                if (role.Id == rolePCVR)
-                {
-                    hasPCVR = true;
-                }
-                // Nomad
-                else if (role.Id == roleNomad)
-                {
-                    hasNomad = true;
-                }
-                // Beta PCVR
-                else if (role.Id == roleBetaPCVR)
-                {
-                    hasBetaPCVR = true;
-                }
-                // Beta Nomad
-                else if (role.Id == roleBetaNomad)
-                {
-                    hasBetaNomad = true;
-                }
-                else continue;
-
-                switch (hasPCVR)
-                {
-                    case true when !hasBetaPCVR:
-                        await user.AddRoleAsync(roleBetaPCVR);
-                        break;
-                    case false when hasBetaPCVR:
-                        await user.AddRoleAsync(rolePCVR);
-                        break;
-                }
-
-                if (hasNomad && !hasBetaNomad)
-                {
-                    await user.AddRoleAsync(roleBetaNomad);
-                }
-
-                if (!hasNomad && hasBetaNomad)
-                {
-                    await user.AddRoleAsync(roleNomad);
-                }
-            }
-
-            if (i % 10 == 0 || i == (Context.Guild.Users.Count - 1))
-                await FollowupAsync($"Done for :{user.DisplayName}; {i} / {Context.Guild.Users.Count}; {(i * 100f / Context.Guild.Users.Count)}%");
-            i++;
-        }
     }
 }

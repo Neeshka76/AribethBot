@@ -2,6 +2,7 @@
 using Discord;
 using Discord.Rest;
 using Discord.WebSocket;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,8 @@ public class ServerLogger
     private readonly DiscordSocketClient socketClient;
     private readonly DatabaseContext db;
     private readonly ILogger<ServerLogger> logger;
+    private readonly Dictionary<ulong, Guild> guildCache = new();
+    private readonly SemaphoreSlim cacheLock = new(1, 1);
 
     public ServerLogger(IServiceProvider services)
     {
@@ -27,11 +30,52 @@ public class ServerLogger
         socketClient.UserJoined += OnUserJoined;
         socketClient.UserLeft += OnUserLeft;
         socketClient.UserVoiceStateUpdated += OnUserVoiceStateUpdated;
+
+        // Clean up cache on guild leave
+        socketClient.LeftGuild += guild =>
+        {
+            guildCache.Remove(guild.Id);
+            return Task.CompletedTask;
+        };
+    }
+
+    // Called by SetLogChannel command after saving changes
+    public async Task RefreshGuildCacheAsync(Guild guild)
+    {
+        await cacheLock.WaitAsync();
+        try
+        {
+            guildCache[guild.GuildId] = guild;
+            logger.LogInformation($"Refreshed cache for guild {guild.GuildId}");
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
     }
 
     private async Task<IMessageChannel?> GetLogChannel(ulong guildId, string key)
     {
-        Guild? dbGuild = await db.Guilds.FindAsync(guildId);
+        Guild? dbGuild;
+
+        await cacheLock.WaitAsync();
+        try
+        {
+            // Load from cache if present
+            if (!guildCache.TryGetValue(guildId, out dbGuild))
+            {
+                dbGuild = await db.Guilds.AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.GuildId == guildId);
+
+                if (dbGuild != null)
+                    guildCache[guildId] = dbGuild;
+            }
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
+
         if (dbGuild == null)
         {
             logger.LogWarning($"No database entry found for guild {guildId}, cannot get log channel '{key}'");
@@ -119,11 +163,10 @@ public class ServerLogger
     {
         IMessageChannel? logChannel = await GetLogChannel(guild.Id, "channelEntryOutLog");
         if (logChannel == null) return;
-
-        SocketGuildUser? guildUser = guild.GetUser(user.Id);
+        
+        SocketGuildUser? guildUser = user as SocketGuildUser;
         string roles = guildUser != null ? string.Join("; ", guildUser.Roles.Where(r => !r.IsEveryone).Select(r => r.Mention)) : "Unknown";
         string joinedAt = guildUser?.JoinedAt?.ToString("g") ?? "Unknown";
-
         EmbedBuilder? embed = new EmbedBuilder()
             .WithAuthor(user.Username, user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl())
             .WithTitle("Member left")
