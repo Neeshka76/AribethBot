@@ -148,7 +148,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
                     case "ban_all":
                     case "kick_all":
-                        
+
                         // Defer immediately
                         await actionEvent.DeferAsync(ephemeral: true);
                         // Create new ephemeral message for processing progress
@@ -480,115 +480,197 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
     private static Task<List<Embed>> BuildEmbedsFromFields(List<(string Name, string Value, bool Inline)> fields, string title)
     {
+        const int MaxEmbedFieldLength = 1024;
         const int MaxEmbedTotalLength = 6000;
 
         List<Embed> embeds = new List<Embed>();
-        EmbedBuilder builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
-        int currentLength = 0;
 
         foreach ((string Name, string Value, bool Inline) field in fields)
         {
-            int fieldLength = field.Name.Length + field.Value.Length;
+            List<Embed> categoryEmbeds = new List<Embed>();
+            EmbedBuilder builder = new EmbedBuilder()
+                .WithTitle(title)
+                .WithColor(new Color(0, 255, 255))
+                .WithCurrentTimestamp();
 
-            // If adding this field would exceed the total embed limit, start a new embed
-            if (currentLength + fieldLength > MaxEmbedTotalLength)
+            int currentLength = 0;
+            string[] lines = field.Value.Split('\n');
+            StringBuilder chunkBuilder = new StringBuilder();
+            int chunkIndex = 0;
+
+            foreach (string line in lines)
             {
-                embeds.Add(builder.Build());
-                builder = new EmbedBuilder().WithTitle(title).WithColor(Color.Red).WithCurrentTimestamp();
-                currentLength = 0;
+                if (chunkBuilder.Length + line.Length + 1 > MaxEmbedFieldLength)
+                {
+                    builder.AddField(
+                        field.Name + (chunkIndex > 0 ? $" (cont.)" : ""),
+                        chunkBuilder.ToString(),
+                        field.Inline
+                    );
+                    currentLength += chunkBuilder.Length;
+
+                    if (currentLength > MaxEmbedTotalLength)
+                    {
+                        categoryEmbeds.Add(builder.Build());
+                        builder = new EmbedBuilder()
+                            .WithTitle(title)
+                            .WithColor(new Color(0, 255, 255))
+                            .WithCurrentTimestamp();
+                        currentLength = 0;
+                    }
+
+                    chunkBuilder.Clear();
+                    chunkIndex++;
+                }
+
+                if (chunkBuilder.Length > 0)
+                    chunkBuilder.AppendLine();
+                chunkBuilder.Append(line);
             }
 
-            builder.AddField(field.Name, field.Value, field.Inline);
-            currentLength += fieldLength;
+            if (chunkBuilder.Length > 0)
+            {
+                builder.AddField(
+                    field.Name + (chunkIndex > 0 ? $" (cont.)" : ""),
+                    chunkBuilder.ToString(),
+                    field.Inline
+                );
+                currentLength += chunkBuilder.Length;
+
+                if (currentLength > MaxEmbedTotalLength)
+                {
+                    categoryEmbeds.Add(builder.Build());
+                    builder = new EmbedBuilder()
+                        .WithTitle(title)
+                        .WithColor(new Color(0, 255, 255))
+                        .WithCurrentTimestamp();
+                }
+            }
+
+            if (builder.Fields.Count > 0)
+                categoryEmbeds.Add(builder.Build());
+
+            // If the category has multiple pages, add numbering in title
+            if (categoryEmbeds.Count > 1)
+            {
+                for (int i = 0; i < categoryEmbeds.Count; i++)
+                {
+                    EmbedBuilder numbered = categoryEmbeds[i].ToEmbedBuilder();
+                    numbered.Title = $"{title} - {field.Name} (page {i + 1}/{categoryEmbeds.Count})";
+                    categoryEmbeds[i] = numbered.Build();
+                }
+            }
+            else if (categoryEmbeds.Count == 1)
+            {
+                EmbedBuilder single = categoryEmbeds[0].ToEmbedBuilder();
+                single.Title = $"{title} - {field.Name}";
+                categoryEmbeds[0] = single.Build();
+            }
+
+            embeds.AddRange(categoryEmbeds);
         }
 
-        if (builder.Fields.Count > 0)
-            embeds.Add(builder.Build());
+        // Add global page numbers in footer
+        for (int i = 0; i < embeds.Count; i++)
+        {
+            EmbedBuilder numbered = embeds[i].ToEmbedBuilder();
+            numbered.Footer = new EmbedFooterBuilder { Text = $"Page {i + 1}/{embeds.Count}" };
+            embeds[i] = numbered.Build();
+        }
 
         return Task.FromResult(embeds);
     }
 
-    [SlashCommand("userstats", "Send stats about the user")]
-    public async Task UserStats([Summary("User", "User to ping for the command")] SocketGuildUser? user = null)
+
+    [SlashCommand("userinfos", "Send infos about the user")]
+    public async Task UserInfos(
+        [Summary("User", "User to ping for the command")]
+        SocketGuildUser? user = null,
+        [Summary("ephemeral", "Set to false to make the message visible to everyone (default is ephemeral at true)")]
+        bool ephemeral = true)
     {
-        await DeferAsync();
+        await DeferAsync(ephemeral: ephemeral);
+
         SocketGuildUser contextUser = Context.User as SocketGuildUser;
         user ??= contextUser;
-        EmbedBuilder embedBuilder = new EmbedBuilder();
+
+        string userMention = user.Mention;
         string userName = user.Username;
-        embedBuilder.WithAuthor(userName);
-        embedBuilder.Title = "User Stats";
-        embedBuilder.Description = $"Stats of {user.Mention}";
-        embedBuilder.WithCurrentTimestamp();
-        embedBuilder.Color = Color.Green;
-        EmbedFieldBuilder userFieldBuilder = new EmbedFieldBuilder
-        {
-            Name = "User",
-            Value = $"Name : {user.Username}\n" +
-                    $"Account created at : {user.CreatedAt}\n" +
-                    $"Account joined at : {user.JoinedAt}"
-        };
+        string avatarUrl = user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl();
+
+        // --- Base Info ---
+        StringBuilder baseBuilder = new StringBuilder();
+        baseBuilder.AppendLine($"Mention: {userMention}");
+        baseBuilder.AppendLine($"Name : {userName}");
+        baseBuilder.AppendLine($"Account created at : {user.CreatedAt:g}");
+        baseBuilder.AppendLine($"Account joined at : {user.JoinedAt:g}");
+        baseBuilder.AppendLine($"Id : {user.Id}");
+        baseBuilder.AppendLine($"Discriminator : {user.Discriminator}");
+        baseBuilder.AppendLine($"Hierarchy in server : {user.Hierarchy}/{user.Guild.Roles.Count}");
+
         if (user.Activities.Count > 0)
         {
-            userFieldBuilder.Value += $"\n" +
-                                      $"Activity :";
+            baseBuilder.AppendLine("\nActivity:");
             foreach (IActivity activity in user.Activities)
             {
-                switch (activity)
+                string? line = activity switch
                 {
-                    case SpotifyGame spotifyGame:
-                    {
-                        userFieldBuilder.Value += $"\n" +
-                                                  $"- **{spotifyGame.Type}** to {spotifyGame.Name} : *{spotifyGame.TrackTitle}* by *{spotifyGame.Artists.First()}* on *{spotifyGame.AlbumTitle}*";
-                    }
-                        break;
-                    case CustomStatusGame customStatusGame:
-                    {
-                        userFieldBuilder.Value += $"\n" +
-                                                  $"- **{customStatusGame.Type}** : {customStatusGame.Emote} {customStatusGame.State}";
-                    }
-                        break;
-                    case RichGame richGame:
-                    {
-                        userFieldBuilder.Value += $"\n" +
-                                                  $"- **{richGame.Type}** : {richGame.Name} {richGame.State} {richGame.LargeAsset}";
-                    }
-                        break;
-                    case StreamingGame streamingGame:
-                    {
-                        userFieldBuilder.Value += $"\n" +
-                                                  $"- **{streamingGame.Type}** : {streamingGame.Name} {streamingGame.Url}";
-                    }
-                        break;
-                    case Game game:
-                    {
-                        userFieldBuilder.Value += $"\n" +
-                                                  $"- **{game.Type}** : {game.Name}";
-                    }
-                        break;
-                }
+                    SpotifyGame spotify => $"- **{spotify.Type}** to {spotify.Name} : *{spotify.TrackTitle}* by *{spotify.Artists.FirstOrDefault()}* on *{spotify.AlbumTitle}*",
+                    CustomStatusGame custom => $"- **{custom.Type}** : {custom.Emote} {custom.State}",
+                    RichGame rich => $"- **{rich.Type}** : {rich.Name} {rich.State} {rich.LargeAsset}",
+                    StreamingGame streaming => $"- **{streaming.Type}** : {streaming.Name} {streaming.Url}",
+                    Game game => $"- **{game.Type}** : {game.Name}",
+                    _ => null
+                };
+                if (!string.IsNullOrEmpty(line)) baseBuilder.AppendLine(line);
             }
         }
 
+        // --- Roles ---
         List<SocketRole> roles = user.Roles
-            .Where(r => !r.IsEveryone) // exclude @everyone
+            .Where(r => !r.IsEveryone)
             .OrderByDescending(r => r.Position)
             .ToList();
 
-        userFieldBuilder.Value += $"\n" +
-                                  $"Roles ({roles.Count}) :" +
-                                  $"\n";
-        foreach (SocketRole socketRole in roles)
+        StringBuilder roleBuilder = new StringBuilder();
+        roleBuilder.AppendLine($"Total Roles: {roles.Count}");
+        foreach (SocketRole role in roles)
         {
-            if (socketRole.IsEveryone) continue;
-            userFieldBuilder.Value += $"- {socketRole}";
-            if (socketRole.IsMentionable)
-                userFieldBuilder.Value += " (***@***)";
-            userFieldBuilder.Value += "\n";
+            roleBuilder.Append($"- {role}");
+            if (role.IsMentionable) roleBuilder.Append(" (***@***)");
+            roleBuilder.AppendLine();
         }
 
-        userFieldBuilder.IsInline = true;
-        embedBuilder.AddField(userFieldBuilder);
-        await FollowupAsync(embed: embedBuilder.Build());
+        // --- Collect fields ---
+        List<(string Name, string Value, bool Inline)> fields = new()
+        {
+            ("User Info", baseBuilder.ToString(), false),
+            ("Roles", roleBuilder.ToString(), false)
+        };
+
+        // --- Build embeds ---
+        List<Embed> pages = await BuildEmbedsFromFields(fields, userName);
+
+        // --- Add avatar & mention to first embed ---
+        for (int i = 0; i < pages.Count; i++)
+        {
+            Embed oldEmbed = pages[i];
+            EmbedBuilder builder = new EmbedBuilder()
+                .WithTitle(oldEmbed.Title)
+                .WithDescription(oldEmbed.Description)
+                .WithFooter(oldEmbed.Footer?.Text, oldEmbed.Footer?.IconUrl)
+                .WithColor(new Color(0, 255, 255)) // cyan
+                .WithThumbnailUrl(avatarUrl)
+                .WithAuthor(userName, avatarUrl, avatarUrl);
+
+            // Copy fields
+            foreach (EmbedField field in oldEmbed.Fields)
+                builder.AddField(field.Name, field.Value, field.Inline);
+
+            pages[i] = builder.Build(); // replace the old embed
+        }
+
+        // --- Send paginated embeds ---
+        await ButtonPaginator.SendPaginatedEmbedsAsync(Context, pages, $"User Stats: {userMention}", ephemeral);
     }
 }
