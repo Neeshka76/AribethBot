@@ -68,6 +68,10 @@ public class SpamTriggerHandler
     {
         tracker.AddMessage(message); // store actual message
         tracker.Cleanup(trigger.IntervalTime);
+        
+        // ignore nonsensical thresholds
+        if (trigger.NbMessages <= 1)
+            return;
 
         bool spamDetected = trigger.Type == SpamType.Bot
             ? tracker.ActiveChannelCount >= trigger.NbMessages
@@ -75,55 +79,98 @@ public class SpamTriggerHandler
 
         if (!spamDetected) return;
         if (message.Channel is not SocketGuildChannel guildChannel) return;
-        SocketGuildUser user = guildChannel.Guild.GetUser(message.Author.Id);
-        if (user != null)
-            await ApplyActionAsync(user, guildChannel.Guild, guildChannel, trigger, tracker);
+
+        SocketGuild guild = guildChannel.Guild;
+        SocketGuildUser user = guild.GetUser(message.Author.Id);
+        if (user == null) return;
+
+        // Do the moderation first
+        await ApplyActionAsync(user, trigger);
+
+        int deletedCount = 0;
+        if (trigger.ActionDelete)
+        {
+            // Small grace period for "just sent" messages
+            await Task.Delay(1000);
+            deletedCount = await DeleteTrackedMessagesAsync(tracker, user);
+        }
+
+        // Logging (after both action + optional deletes)
+        LogAction(user, guild, trigger, deletedCount);
 
         tracker.Clear();
     }
 
-    private async Task ApplyActionAsync(SocketGuildUser user, SocketGuild guild, SocketGuildChannel channel, SpamTrigger trigger, MessageTracker tracker)
+    private async Task ApplyActionAsync(SocketGuildUser user, SpamTrigger trigger)
     {
         int duration = trigger.ActionDuration ?? 10;
-        int deletedCount = 0;
-
-        if (trigger.ActionDelete && tracker != null)
-        {
-            List<SocketUserMessage> messagesToDelete = tracker.GetMessagesForSpam()
-                .Where(m => m.Author.Id == user.Id)
-                .ToList();
-
-            foreach (SocketUserMessage msg in messagesToDelete)
-            {
-                await msg.DeleteAsync();
-                deletedCount++;
-            }
-        }
-
-        string deleteText = trigger.ActionDelete ? $" and deleted {deletedCount} message(s)" : "";
 
         switch (trigger.ActionType)
         {
             case SpamAction.Ban:
-                await user.BanAsync(1, $"Aribeth smited the spammer{(trigger.ActionDelete ? " and healed the guild" : "")}");
+                await user.BanAsync(1, $"Aribeth smited the spammer");
+                break;
+
+            case SpamAction.Kick:
+                await user.KickAsync($"Aribeth blessed the guild and removed the spammer");
+                break;
+
+            case SpamAction.Timeout:
+                await user.SetTimeOutAsync(
+                    TimeSpan.FromMinutes(duration),
+                    new RequestOptions { AuditLogReason = $"Aribeth protected the guild" }
+                );
+                break;
+
+            case SpamAction.NoAction:
+                break;
+        }
+    }
+
+    private async Task<int> DeleteTrackedMessagesAsync(MessageTracker tracker, SocketGuildUser user)
+    {
+        List<SocketUserMessage> messagesToDelete = tracker.GetMessagesForSpam()
+            .Where(m => m.Author.Id == user.Id)
+            .ToList();
+
+        int deletedCount = 0;
+        foreach (SocketUserMessage msg in messagesToDelete)
+        {
+            try
+            {
+                await msg.DeleteAsync();
+                deletedCount++;
+            }
+            catch
+            {
+                /* ignore if already deleted */
+            }
+        }
+
+        return deletedCount;
+    }
+
+    private void LogAction(SocketGuildUser user, SocketGuild guild, SpamTrigger trigger, int deletedCount)
+    {
+        string deleteText = trigger.ActionDelete && trigger.ActionType != SpamAction.NoAction ? $" and deleted {deletedCount} message(s)" : "";
+
+        switch (trigger.ActionType)
+        {
+            case SpamAction.Ban:
                 logger.LogInformation($"User {user.Username} ({user.Id}) banned from {guild.Name} ({guild.Id}) for spamming{deleteText}.");
                 break;
 
             case SpamAction.Kick:
-                await user.KickAsync($"Aribeth blessed the guild and removed the spammer{(trigger.ActionDelete ? " and healed the guild" : "")}");
                 logger.LogInformation($"User {user.Username} ({user.Id}) kicked from {guild.Name} ({guild.Id}) for spamming{deleteText}.");
                 break;
 
             case SpamAction.Timeout:
-                await user.SetTimeOutAsync(TimeSpan.FromMinutes(duration),
-                    new RequestOptions { AuditLogReason = $"Aribeth protected{(trigger.ActionDelete ? " and healed the guild" : " the guild")}" });
                 logger.LogInformation($"User {user.Username} ({user.Id}) timed out in {guild.Name} ({guild.Id}) for spamming{deleteText}.");
                 break;
 
             case SpamAction.NoAction:
                 logger.LogInformation($"Aribeth saw a troublemaker {user.Username} ({user.Id}) in {guild.Name}, but she'll allow it.");
                 break;
-
             default:
                 logger.LogWarning($"Aribeth is confused and doesn't know how to act '{trigger.ActionType}' for user {user.Username} ({user.Id}) in {guild.Name} ({guild.Id}).");
                 break;
