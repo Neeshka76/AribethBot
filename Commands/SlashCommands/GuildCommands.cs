@@ -593,11 +593,11 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
         SocketGuildUser contextUser = Context.User as SocketGuildUser;
         user ??= contextUser;
-
+        
         string userMention = user.Mention;
         string userName = user.Username;
         string avatarUrl = user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl();
-
+        
         // --- Base Info ---
         StringBuilder baseBuilder = new StringBuilder();
         baseBuilder.AppendLine($"Mention: {userMention}");
@@ -606,7 +606,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         baseBuilder.AppendLine($"Account joined at : {user.JoinedAt:g}");
         baseBuilder.AppendLine($"Id : {user.Id}");
         baseBuilder.AppendLine($"Discriminator : {user.Discriminator}");
-        baseBuilder.AppendLine($"Hierarchy in server : {user.Hierarchy}/{user.Guild.Roles.Count}");
+        baseBuilder.AppendLine($"Hierarchy in server : {GetHierarchyDisplay(user, Context.Guild)}");
 
         if (user.Activities.Count > 0)
         {
@@ -627,14 +627,14 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         // --- Roles ---
-        List<SocketRole> roles = user.Roles
+        List<SocketRole> userRoles = user.Roles
             .Where(r => !r.IsEveryone)
             .OrderByDescending(r => r.Position)
             .ToList();
 
         StringBuilder roleBuilder = new StringBuilder();
-        roleBuilder.AppendLine($"Total Roles: {roles.Count}");
-        foreach (SocketRole role in roles)
+        roleBuilder.AppendLine($"Total Roles: {userRoles.Count}");
+        foreach (SocketRole role in userRoles)
         {
             roleBuilder.Append($"- {role}");
             if (role.IsMentionable) roleBuilder.Append(" (***@***)");
@@ -672,5 +672,89 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
 
         // --- Send paginated embeds ---
         await ButtonPaginator.SendPaginatedEmbedsAsync(Context, pages, $"User Stats: {userMention}", ephemeral);
+    }
+    
+    private string GetHierarchyDisplay(SocketGuildUser user, SocketGuild guild)
+    {
+        // Exclude @everyone
+        List<SocketRole> rolesOrdered = guild.Roles
+            .Where(r => r.Id != guild.Id)
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        int totalRoles = rolesOrdered.Count;
+
+        // Owner special case
+        if (guild.OwnerId == user.Id)
+        {
+            return $"Owner (0/{totalRoles})";
+        }
+
+        // Get user roles (excluding @everyone)
+        List<SocketRole> userRoles = user.Roles
+            .Where(r => r.Id != guild.Id)
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        // Roleless = bottom
+        if (!userRoles.Any())
+        {
+            return $"No Roles ({totalRoles}/{totalRoles})";
+        }
+
+        // Highest role
+        SocketRole highestRole = userRoles.First();
+        int index = rolesOrdered.IndexOf(highestRole) + 1; // 1-based index
+
+        return $"{highestRole.Name} ({index}/{totalRoles})";
+    }
+    
+    private int GetHierarchyIndex(SocketGuildUser user, SocketGuild guild)
+    {
+        // Exclude @everyone role
+        List<SocketRole> rolesOrdered = guild.Roles
+            .Where(r => r.Id != guild.Id)
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        int totalRoles = rolesOrdered.Count;
+
+        if (guild.OwnerId == user.Id)
+        {
+            return 0; // Owner always above
+        }
+
+        List<SocketRole> userRoles = user.Roles
+            .Where(r => r.Id != guild.Id)
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        if (!userRoles.Any()) return totalRoles; // Roleless = bottom
+        SocketRole highestRole = userRoles.First();
+        return rolesOrdered.IndexOf(highestRole) + 1; // 1-based index
+
+    }
+    private string GetHierarchyRoleMention(SocketGuildUser user, SocketGuild guild)
+    {
+        // Owner always first
+        if (guild.OwnerId == user.Id)
+        {
+            return "Owner";
+        }
+
+        // Exclude @everyone
+        List<SocketRole> userRoles = user.Roles
+            .Where(r => r.Id != guild.Id)
+            .OrderByDescending(r => r.Position)
+            .ToList();
+
+        if (!userRoles.Any())
+        {
+            return "No Roles";
+        }
+
+        // Return highest role as a clickable mention
+        SocketRole highestRole = userRoles.First();
+        return highestRole.Mention;
     }
 }
