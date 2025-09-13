@@ -19,7 +19,6 @@ public class SpamTriggerHandler
         socketClient = services.GetRequiredService<DiscordSocketClient>();
         db = services.GetRequiredService<DatabaseContext>();
         logger = services.GetRequiredService<ILogger<SpamTriggerHandler>>();
-
         socketClient.MessageReceived += SocketClientOnMessageReceived;
     }
 

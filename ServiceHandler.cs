@@ -65,17 +65,17 @@ namespace AribethBot
         {
             try
             {
+                SocketInteractionContext ctx = new SocketInteractionContext(SocketClient, arg);
                 switch (arg.Type)
                 {
                     case InteractionType.ApplicationCommand:
                         // Slash or context command
-                        SocketInteractionContext ctx = new SocketInteractionContext(SocketClient, arg);
                         await interactions.ExecuteCommandAsync(ctx, services);
                         break;
 
                     case InteractionType.MessageComponent:
                         // Button / select menu
-                        
+                        await interactions.ExecuteCommandAsync(ctx, services);
                         break;
 
                     default:
@@ -125,6 +125,7 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
+
             return Task.CompletedTask;
         }
 
@@ -158,6 +159,7 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
+
             return Task.CompletedTask;
         }
 
@@ -191,6 +193,7 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
+
             return Task.CompletedTask;
         }
     }

@@ -49,7 +49,7 @@ public static class GuildHelper
                     Type = type,
                     ActionType = type == SpamType.Bot ? SpamAction.Ban : SpamAction.Timeout,
                     ActionDuration = type == SpamType.Classic ? 10 : null, // default timeout minutes
-                    ActionDelete = false
+                    ActionDelete = type == SpamType.Bot
                 };
 
                 await db.SpamTriggers.AddAsync(trigger);
