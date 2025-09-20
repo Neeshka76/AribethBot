@@ -3,6 +3,7 @@ using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AribethBot.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace AribethBot;
 
@@ -37,23 +38,34 @@ public class SpamTriggerHandler
             UserMessageInfo userInfo = userMessages.GetValueOrDefault(message.Author.Id) ?? new UserMessageInfo();
             userMessages[message.Author.Id] = userInfo;
 
-            // Load guild-specific spam triggers
-            List<SpamTrigger> triggers = db.SpamTriggers
-                .Where(t => t.GuildId == guildChannel.Guild.Id)
-                .ToList();
-
-            foreach (SpamTrigger trigger in triggers)
+            // 🚀 Offload to background so we don't block gateway
+            _ = Task.Run(async () =>
             {
-                switch (trigger.Type)
+                try
                 {
-                    case SpamType.Classic:
-                        await ProcessSpamCheck(message, userInfo.ClassicMessages, trigger);
-                        break;
-                    case SpamType.Bot:
-                        await ProcessSpamCheck(message, userInfo.BotMessages, trigger);
-                        break;
+                    // Load guild-specific spam triggers asynchronously
+                    List<SpamTrigger> triggers = await db.SpamTriggers
+                        .Where(t => t.GuildId == guildChannel.Guild.Id)
+                        .ToListAsync();
+
+                    foreach (SpamTrigger trigger in triggers)
+                    {
+                        switch (trigger.Type)
+                        {
+                            case SpamType.Classic:
+                                await ProcessSpamCheck(message, userInfo.ClassicMessages, trigger);
+                                break;
+                            case SpamType.Bot:
+                                await ProcessSpamCheck(message, userInfo.BotMessages, trigger);
+                                break;
+                        }
+                    }
                 }
-            }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, $"Error while processing spam triggers for {guildChannel.Guild.Name} ({guildChannel.Guild.Id})");
+                }
+            });
         }
         else
         {
@@ -67,7 +79,7 @@ public class SpamTriggerHandler
     {
         tracker.AddMessage(message); // store actual message
         tracker.Cleanup(trigger.IntervalTime);
-        
+
         // ignore nonsensical thresholds
         if (trigger.NbMessages <= 1)
             return;
@@ -132,17 +144,63 @@ public class SpamTriggerHandler
             .Where(m => m.Author.Id == user.Id)
             .ToList();
 
+        if (!messagesToDelete.Any())
+            return 0;
+
+
         int deletedCount = 0;
-        foreach (SocketUserMessage msg in messagesToDelete)
+        // Group messages by channel (BulkDelete works per-channel)
+        IEnumerable<IGrouping<ulong, SocketUserMessage>> channelGroups = messagesToDelete.GroupBy(m => m.Channel.Id);
+        foreach (IGrouping<ulong, SocketUserMessage> group in channelGroups)
         {
-            try
+            if (socketClient.GetChannel(group.Key) is not ITextChannel textChannel)
+                continue;
+
+            // Only recent (< 14 days) can be bulk-deleted
+            List<SocketUserMessage> recentMessages = group
+                .Where(m => (DateTimeOffset.UtcNow - m.Timestamp).TotalDays < 14)
+                .ToList();
+
+            if (recentMessages.Count > 1)
             {
-                await msg.DeleteAsync();
-                deletedCount++;
+                try
+                {
+                    await textChannel.DeleteMessagesAsync(recentMessages);
+                    deletedCount += recentMessages.Count;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, $"Bulk delete failed in {textChannel.Name} ({textChannel.Id})");
+                    // fallback to individual deletes
+                    foreach (SocketUserMessage msg in recentMessages)
+                    {
+                        try
+                        {
+                            await msg.DeleteAsync();
+                            deletedCount++;
+                        }
+                        catch
+                        {
+                            /* ignore */
+                        }
+                    }
+                }
             }
-            catch
+            else
             {
-                /* ignore if already deleted */
+                // Just 1 message or too old → delete individually
+                foreach (SocketUserMessage msg in group)
+                {
+                    try
+                    {
+                        await msg.DeleteAsync();
+                        deletedCount++;
+                    }
+                    catch
+                    {
+                        /* ignore */
+                    }
+                }
             }
         }
 
