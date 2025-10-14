@@ -38,7 +38,7 @@ public class SpamTriggerHandler
             UserMessageInfo userInfo = userMessages.GetValueOrDefault(message.Author.Id) ?? new UserMessageInfo();
             userMessages[message.Author.Id] = userInfo;
 
-            // 🚀 Offload to background so we don't block gateway
+            // Offload to background so we don't block gateway
             _ = Task.Run(async () =>
             {
                 try
@@ -65,6 +65,8 @@ public class SpamTriggerHandler
                 {
                     logger.LogError(ex, $"Error while processing spam triggers for {guildChannel.Guild.Name} ({guildChannel.Guild.Id})");
                 }
+
+                return Task.CompletedTask;
             });
         }
         else
@@ -94,22 +96,25 @@ public class SpamTriggerHandler
         SocketGuild guild = guildChannel.Guild;
         SocketGuildUser user = guild.GetUser(message.Author.Id);
         if (user == null) return;
-
-        // Do the moderation first
-        await ApplyActionAsync(user, trigger);
-
-        int deletedCount = 0;
-        if (trigger.ActionDelete)
+        // Run apart it so it doesn't block the gateway
+        _ = Task.Run(async () =>
         {
-            // Small grace period for "just sent" messages
-            await Task.Delay(1000);
-            deletedCount = await DeleteTrackedMessagesAsync(tracker, user);
-        }
+            // Do the moderation first
+            await ApplyActionAsync(user, trigger);
 
-        // Logging (after both action + optional deletes)
-        LogAction(user, guild, trigger, deletedCount);
+            int deletedCount = 0;
+            if (trigger.ActionDelete)
+            {
+                // Small grace period for "just sent" messages
+                await Task.Delay(1000);
+                deletedCount = await DeleteTrackedMessagesAsync(tracker, user);
+            }
 
-        tracker.Clear();
+            // Logging (after both action + optional deletes)
+            LogAction(user, guild, trigger, deletedCount);
+
+            tracker.Clear();
+        });
     }
 
     private async Task ApplyActionAsync(SocketGuildUser user, SpamTrigger trigger)
