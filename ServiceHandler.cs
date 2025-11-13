@@ -18,7 +18,7 @@ namespace AribethBot
         private readonly CommandService commands;
         public IConfiguration Config;
         public readonly HttpClient HttpClient;
-
+        
         public ServiceHandler(IServiceProvider services)
         {
             this.services = services;
@@ -36,7 +36,7 @@ namespace AribethBot
             interactions.ComponentCommandExecuted += ComponentCommandExecuted;
             commands.CommandExecuted += Commands_CommandExecuted;
         }
-
+        
         private async Task Commands_CommandExecuted(Optional<CommandInfo> command, ICommandContext context, Discord.Commands.IResult result)
         {
             // if a command isn't found, log that info to console and exit this method
@@ -47,20 +47,20 @@ namespace AribethBot
                 await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
                 return;
             }
-
+            
             // log success to the console and exit this method
             if (result.IsSuccess)
             {
                 Logger.LogInformation($"Command [{command.Value.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
         }
-
+        
         public async Task InitializeAsync()
         {
             // add the public modules that inherit InteractionModuleBase<T> to the InteractionService
             await interactions.AddModulesAsync(Assembly.GetEntryAssembly(), services);
         }
-
+        
         private async Task HandleInteraction(SocketInteraction arg)
         {
             try
@@ -72,12 +72,12 @@ namespace AribethBot
                         // Slash or context command
                         await interactions.ExecuteCommandAsync(ctx, services);
                         break;
-
+                    
                     case InteractionType.MessageComponent:
                         // Button / select menu
                         await interactions.ExecuteCommandAsync(ctx, services);
                         break;
-
+                    
                     default:
                         Logger.LogWarning("Unhandled interaction type: {Type}", arg.Type);
                         break;
@@ -94,7 +94,7 @@ namespace AribethBot
                 }
             }
         }
-
+        
         private Task ComponentCommandExecuted(ComponentCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
             if (!result.IsSuccess)
@@ -125,10 +125,10 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
-
+            
             return Task.CompletedTask;
         }
-
+        
         private Task ContextCommandExecuted(ContextCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
             if (!result.IsSuccess)
@@ -159,10 +159,10 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
-
+            
             return Task.CompletedTask;
         }
-
+        
         private Task SlashCommandExecuted(SlashCommandInfo commandInfo, IInteractionContext context, Discord.Interactions.IResult result)
         {
             if (!result.IsSuccess)
@@ -193,7 +193,7 @@ namespace AribethBot
             {
                 Logger.LogInformation($"Command [{commandInfo.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
             }
-
+            
             return Task.CompletedTask;
         }
     }

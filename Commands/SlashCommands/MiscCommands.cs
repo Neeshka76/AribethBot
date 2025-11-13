@@ -1,6 +1,7 @@
 ﻿using Discord.Interactions;
 
 namespace AribethBot;
+
 [Group("misc", "Commands related to miscellaneous")]
 public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
 {
@@ -8,7 +9,7 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
     public MiscCommands(ServiceHandler handler)
     {
     }
-
+    
     public enum TimestampFormat
     {
         ShortTime,
@@ -19,7 +20,7 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
         LongDateDayWeekShortTime,
         Relative
     }
-
+    
     enum TypeOfError
     {
         None,
@@ -31,9 +32,9 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
         Minute,
         TimeZone
     }
-
+    
     TypeOfError typeOfError = TypeOfError.None;
-
+    
     // Timestamp command
     [SlashCommand("timestamp", "Give a discord timestamp")]
     public async Task UnixTimestamp([Summary("Year", "Year : between 1970 & 3000")] int year,
@@ -95,10 +96,10 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
             char timeStampChar = TimeStampChar(timestampFormat);
             message = $"<t:{unixTime}:{timeStampChar}>";
         }
-
+        
         await RespondAsync($"{message}");
     }
-
+    
     char TimeStampChar(TimestampFormat timestampFormat)
     {
         switch (timestampFormat)
@@ -121,7 +122,7 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
                 return 'f';
         }
     }
-
+    
     private bool ErrorInData(int year, int month, int day, int hour, int minute, int timeZone)
     {
         if (year > 3000 || year < 1970)
@@ -129,13 +130,13 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
             typeOfError = TypeOfError.Year;
             return true;
         }
-
+        
         if (month > 12 || month < 1)
         {
             typeOfError = TypeOfError.Month;
             return true;
         }
-
+        
         bool isLeapYear = IsLeapYear(year, month);
         if (day > 31 || day < 1 ||
             ((month % 2 == 0 && month <= 7 || month % 2 == 1 && month > 7) && day > 30))
@@ -143,31 +144,30 @@ public class MiscCommands : InteractionModuleBase<SocketInteractionContext>
             typeOfError = TypeOfError.Day;
             return true;
         }
-
+        
         if (month == 2 && ((!isLeapYear && day > 28) || isLeapYear && day > 29))
         {
             typeOfError = TypeOfError.LeapYear;
             return true;
         }
-
+        
         if (hour > 23 || hour < 0)
         {
             typeOfError = TypeOfError.Hour;
             return true;
         }
-
+        
         if (minute > 59 || minute < 0)
         {
             typeOfError = TypeOfError.Minute;
             return true;
         }
-
+        
         if (timeZone <= 14 && timeZone >= -12) return false;
         typeOfError = TypeOfError.TimeZone;
         return true;
-
     }
-
+    
     private bool IsLeapYear(int year, int month)
     {
         return month == 2 && year % 4 == 0 && year % 100 != 0 || (year % 4 == 0 && year % 100 == 0 && year % 400 == 0);

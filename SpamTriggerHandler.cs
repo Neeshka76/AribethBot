@@ -81,18 +81,15 @@ public class SpamTriggerHandler
     {
         tracker.AddMessage(message); // store actual message
         tracker.Cleanup(trigger.IntervalTime);
-        
         // ignore nonsensical thresholds
         if (trigger.NbMessages <= 1)
             return;
-        
         bool spamDetected = trigger.Type == SpamType.Bot
             ? tracker.ActiveChannelCount >= trigger.NbMessages
             : tracker.TotalMessages >= trigger.NbMessages;
         
         if (!spamDetected) return;
         if (message.Channel is not SocketGuildChannel guildChannel) return;
-        
         SocketGuild guild = guildChannel.Guild;
         SocketGuildUser user = guild.GetUser(message.Author.Id);
         if (user == null) return;
@@ -101,7 +98,6 @@ public class SpamTriggerHandler
         {
             // Do the moderation first
             await ApplyActionAsync(user, trigger);
-            
             int deletedCount = 0;
             if (trigger.ActionDelete)
             {
@@ -112,7 +108,6 @@ public class SpamTriggerHandler
             
             // Logging (after both action + optional deletes)
             LogAction(user, guild, trigger, deletedCount);
-            
             tracker.Clear();
         });
     }
@@ -120,24 +115,20 @@ public class SpamTriggerHandler
     private async Task ApplyActionAsync(SocketGuildUser user, SpamTrigger trigger)
     {
         int duration = trigger.ActionDuration ?? 10;
-        
         switch (trigger.ActionType)
         {
             case SpamAction.Ban:
                 await user.BanAsync(1, $"Aribeth smited the spammer");
                 break;
-            
             case SpamAction.Kick:
                 await user.KickAsync($"Aribeth blessed the guild and removed the spammer");
                 break;
-            
             case SpamAction.Timeout:
                 await user.SetTimeOutAsync(
                     TimeSpan.FromMinutes(duration),
                     new RequestOptions { AuditLogReason = $"Aribeth protected the guild" }
                 );
                 break;
-            
             case SpamAction.NoAction:
                 break;
         }

@@ -16,33 +16,33 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
     private readonly DatabaseContext db;
     private readonly ILogger<GuildCommands> logger;
     private readonly IServiceProvider services;
-
+    
     public GuildCommands(DatabaseContext db, ILogger<GuildCommands> logger, IServiceProvider services)
     {
         this.db = db;
         this.logger = logger;
         this.services = services;
     }
-
-
+    
+    
     [SlashCommand("manage_users", "View and manage special user categories")]
     [RequireUserPermission(GuildPermission.Administrator)]
     public async Task ManageUsersCommand()
     {
         await DeferAsync(ephemeral: true);
-
+        
         // Main buttons to select user category
         MessageComponent categoryButtons = new ComponentBuilder()
             .WithButton("Pending Users", "select_pending")
             .WithButton("Users Without Roles", "select_no_roles", ButtonStyle.Secondary)
             .Build();
-
+        
         IUserMessage mainMessage = await FollowupAsync(
             "Select which type of users to manage:",
             components: categoryButtons,
             ephemeral: true
         );
-
+        
         async Task CategoryHandler(SocketMessageComponent categoryEvent)
         {
             if (categoryEvent.Message.Id != mainMessage.Id) return;
@@ -51,10 +51,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 await categoryEvent.RespondAsync("You cannot use this menu.", ephemeral: true);
                 return;
             }
-
+            
             List<SocketGuildUser> targetUsers;
             string title, reasonPrefix;
-
+            
             switch (categoryEvent.Data.CustomId)
             {
                 case "select_pending":
@@ -62,17 +62,17 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     title = "Pending Users";
                     reasonPrefix = "Pending screening";
                     break;
-
+                
                 case "select_no_roles":
                     targetUsers = Context.Guild.Users.Where(u => u.Roles.Count == 1).ToList();
                     title = "Users Without Roles";
                     reasonPrefix = "No roles";
                     break;
-
+                
                 default:
                     return;
             }
-
+            
             if (!targetUsers.Any())
             {
                 await categoryEvent.UpdateAsync(msg =>
@@ -82,7 +82,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 });
                 return;
             }
-
+            
             // Build paginated embeds for display
             List<(string Name, string Value, bool Inline)> fields = new();
             int chunkSize = 10;
@@ -91,10 +91,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 IEnumerable<string> chunk = targetUsers.Skip(i).Take(chunkSize).Select(u => u.Mention);
                 fields.Add(($"Users {i + 1}-{i + chunk.Count()}", string.Join("\n", chunk), false));
             }
-
+            
             List<Embed> pages = await BuildEmbedsFromFields(fields, title);
             int currentPage = 0;
-
+            
             Embed AddPageFooter(Embed embed)
             {
                 EmbedBuilder builder = new EmbedBuilder()
@@ -102,14 +102,14 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     .WithDescription(embed.Description)
                     .WithColor(embed.Color ?? Color.Default)
                     .WithFooter($"Page {currentPage + 1}/{pages.Count}");
-
+                
                 if (embed.Timestamp.HasValue) builder.WithTimestamp(embed.Timestamp.Value);
                 if (embed.Author != null) builder.WithAuthor(embed.Author.Value.Name, embed.Author.Value.IconUrl, embed.Author.Value.Url);
                 foreach (EmbedField field in embed.Fields) builder.AddField(field.Name, field.Value, field.Inline);
-
+                
                 return builder.Build();
             }
-
+            
             // Buttons for pagination and actions
             MessageComponent BuildComponents()
             {
@@ -120,14 +120,14 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     .WithButton("Kick All", "kick_all")
                     .Build();
             }
-
+            
             await categoryEvent.UpdateAsync(msg =>
             {
                 msg.Content = null;
                 msg.Embed = AddPageFooter(pages[currentPage]);
                 msg.Components = BuildComponents();
             });
-
+            
             async Task ActionHandler(SocketMessageComponent actionEvent)
             {
                 if (actionEvent.Message.Id != mainMessage.Id) return;
@@ -136,7 +136,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     await actionEvent.RespondAsync("You cannot control this paginator.", ephemeral: true);
                     return;
                 }
-
+                
                 switch (actionEvent.Data.CustomId)
                 {
                     case "paginator_prev":
@@ -145,10 +145,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     case "paginator_next":
                         currentPage = Math.Min(currentPage + 1, pages.Count - 1);
                         break;
-
+                    
                     case "ban_all":
                     case "kick_all":
-
+                        
                         // Defer immediately
                         await actionEvent.DeferAsync(ephemeral: true);
                         // Create new ephemeral message for processing progress
@@ -156,11 +156,11 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                             $"Starting {(actionEvent.Data.CustomId == "ban_all" ? "ban" : "kick")} for {targetUsers.Count} users...",
                             ephemeral: true
                         );
-
+                        
                         int total = targetUsers.Count;
                         int processed = 0;
                         int batchSize = 5;
-
+                        
                         foreach (SocketGuildUser user in targetUsers)
                         {
                             try
@@ -174,24 +174,24 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                             {
                                 // ignore individual errors
                             }
-
+                            
                             processed++;
-
+                            
                             if (processed % batchSize == 0 || processed == total)
                             {
                                 double percent = (processed * 100.0) / total;
                                 await progressMessage.ModifyAsync(msg =>
                                     msg.Content = $"Processing {(actionEvent.Data.CustomId == "ban_all" ? "ban" : "kick")}: {processed}/{total} users ({percent:0.0}%)");
                             }
-
+                            
                             await Task.Delay(1000); // optional delay
                         }
-
+                        
                         await progressMessage.ModifyAsync(msg =>
                             msg.Content = $"All {total} users have been {(actionEvent.Data.CustomId == "ban_all" ? "banned" : "kicked")}!");
                         return;
                 }
-
+                
                 // Update pagination embeds
                 await actionEvent.UpdateAsync(msg =>
                 {
@@ -199,9 +199,9 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     msg.Components = BuildComponents();
                 });
             }
-
+            
             Context.Client.ButtonExecuted += ActionHandler;
-
+            
             // Auto-remove handler after 5 minutes
             _ = Task.Run(async () =>
             {
@@ -209,9 +209,9 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 Context.Client.ButtonExecuted -= ActionHandler;
             });
         }
-
+        
         Context.Client.ButtonExecuted += CategoryHandler;
-
+        
         // Auto-remove main handler after 5 minutes
         _ = Task.Run(async () =>
         {
@@ -220,8 +220,8 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             await mainMessage.ModifyAsync(m => m.Components = new ComponentBuilder().Build());
         });
     }
-
-
+    
+    
     [SlashCommand("setspamaction", "Set the spam action for this guild")]
     [RequireUserPermission(GuildPermission.Administrator)]
     public async Task SetSpamAction(
@@ -235,12 +235,12 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
     {
         ulong guildId = Context.Guild.Id;
         SpamTrigger? trigger = await db.SpamTriggers.FindAsync(guildId, type);
-
+        
         // Capture old values
         string oldAction = trigger?.ActionType.ToString() ?? "not set";
         string oldDuration = trigger?.ActionDuration > 0 ? $"{trigger.ActionDuration} min" : "N/A";
         string oldDelete = trigger?.ActionDelete == true ? "Yes" : "No";
-
+        
         if (trigger == null)
         {
             trigger = new SpamTrigger
@@ -250,28 +250,28 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             };
             await db.SpamTriggers.AddAsync(trigger);
         }
-
+        
         trigger.ActionType = actionType;
         trigger.ActionDuration = duration;
         trigger.ActionDelete = deleteMessages;
-
+        
         await db.SaveChangesAsync();
-
+        
         // New values
         string newAction = trigger.ActionType.ToString();
         string newDuration = trigger.ActionType == SpamAction.Timeout ? $"{trigger.ActionDuration} min" : "N/A";
         string newDelete = trigger.ActionDelete ? "Yes" : "No";
-
+        
         EmbedBuilder embed = new EmbedBuilder()
             .WithTitle($"Spam Action Updated ({type})")
             .WithColor(Color.Blue)
             .AddField("Old Values", $"**Action:** {oldAction}\n**Duration:** {oldDuration}\n**Delete Msgs:** {oldDelete}", true)
             .AddField("New Values", $"**Action:** {newAction}\n**Duration:** {newDuration}\n**Delete Msgs:** {newDelete}", true)
             .WithCurrentTimestamp();
-
+        
         await RespondAsync(embed: embed.Build());
     }
-
+    
     [SlashCommand("setspamtrigger", "Set spam trigger threshold for this guild")]
     public async Task SetSpamTrigger(
         [Summary("type", "classic or bot")] SpamType type,
@@ -281,9 +281,9 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         double intervalSeconds)
     {
         ulong guildId = Context.Guild.Id;
-
+        
         SpamTrigger? trigger = await db.SpamTriggers.FindAsync(guildId, type);
-
+        
         if (trigger == null)
         {
             trigger = new SpamTrigger
@@ -296,17 +296,17 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             };
             await db.SpamTriggers.AddAsync(trigger);
         }
-
+        
         // Save old values
         int oldNb = trigger.NbMessages;
         double oldInterval = trigger.IntervalTime;
-
+        
         // Update values
         trigger.NbMessages = nbMessages;
         trigger.IntervalTime = intervalSeconds;
-
+        
         await db.SaveChangesAsync();
-
+        
         // Reply embed
         EmbedBuilder embed = new EmbedBuilder()
             .WithTitle($"Spam Trigger Updated ({type})")
@@ -314,10 +314,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             .AddField("Old Values", $"**Messages:** {oldNb}\n**Interval:** {oldInterval:F1} sec", true)
             .AddField("New Values", $"**Messages:** {trigger.NbMessages}\n**Interval:** {trigger.IntervalTime:F1} sec", true)
             .WithCurrentTimestamp();
-
+        
         await RespondAsync(embed: embed.Build());
     }
-
+    
     public enum LogChannelType
     {
         Deleted,
@@ -326,7 +326,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         Ban,
         Voice
     }
-
+    
     [RequireUserPermission(GuildPermission.Administrator)]
     [SlashCommand("setlogchannel", "Set a log channel for this guild")]
     public async Task SetLogChannel(
@@ -336,7 +336,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
     {
         ulong guildId = Context.Guild.Id;
         Guild? dbGuild = await db.Guilds.FindAsync(guildId);
-
+        
         if (dbGuild == null)
         {
             // Ensure the guild exists in DB
@@ -344,7 +344,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             await db.Guilds.AddAsync(dbGuild);
             await db.SaveChangesAsync();
         }
-
+        
         switch (type)
         {
             case LogChannelType.Deleted:
@@ -363,7 +363,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 dbGuild.ChannelVoiceActivityLog = channel?.Id;
                 break;
         }
-
+        
         await db.SaveChangesAsync();
         // Refresh cache in ServerLogger
         ServerLogger loggerService = services.GetRequiredService<ServerLogger>();
@@ -373,23 +373,23 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             : $"Updated `{type}` log channel to {channel.Mention} for this guild.";
         await RespondAsync(response);
     }
-
+    
     [SlashCommand("serverstats", "Send stats about the server")]
     public async Task ServerStats(
         [Summary("ephemeral", "Set to false to make the message visible to everyone (default is ephemeral at true)")]
         bool ephemeral = true)
     {
         await DeferAsync(ephemeral);
-
+        
         SocketGuild guild = Context.Guild;
         SocketGuildUser owner = guild.Owner;
-
+        
         // --- Owner Info ---
         StringBuilder ownerBuilder = new StringBuilder();
         ownerBuilder.AppendLine($"Name : {owner.Mention}");
         ownerBuilder.AppendLine($"Account created at : {owner.CreatedAt:g}");
         ownerBuilder.AppendLine($"Account joined at : {owner.JoinedAt:g}");
-
+        
         if (owner.Activities.Count > 0)
         {
             ownerBuilder.AppendLine("Activity:");
@@ -407,7 +407,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 if (line != null) ownerBuilder.AppendLine(line);
             }
         }
-
+        
         ownerBuilder.AppendLine($"\nRoles ({owner.Roles.Count}):");
         foreach (SocketRole role in owner.Roles.OrderByDescending(r => r.Position))
         {
@@ -416,21 +416,21 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             if (role.IsMentionable) ownerBuilder.Append(" (***@***)");
             ownerBuilder.AppendLine();
         }
-
+        
         // --- Members ---
         int nbBots = guild.Users.Count(u => u.IsBot);
         string memberStats =
             $"All Members : {guild.MemberCount}\n" +
             $"Bots : {nbBots}\n" +
             $"Humans : {guild.MemberCount - nbBots}";
-
+        
         // --- Roles ---
         StringBuilder roleBuilder = new StringBuilder();
         roleBuilder.AppendLine($"Number of Roles : {guild.Roles.Count}");
         roleBuilder.AppendLine($"Highest Role : {guild.Roles.OrderByDescending(r => r.Position).First()}");
         roleBuilder.AppendLine($"Most popular Role : {guild.Roles.OrderByDescending(r => r.Members.Count()).First()}");
         roleBuilder.AppendLine("Roles and numbers of members (***Mentionable***):");
-
+        
         foreach (SocketRole role in guild.Roles.OrderByDescending(r => r.Position))
         {
             if (role.IsEveryone) continue;
@@ -438,7 +438,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             if (role.IsMentionable) roleBuilder.Append(" (***@***)");
             roleBuilder.AppendLine();
         }
-
+        
         // --- Channels ---
         StringBuilder channelBuilder = new StringBuilder();
         channelBuilder.AppendLine($"Number of Channels : {guild.Channels.Count}");
@@ -449,7 +449,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         channelBuilder.AppendLine($"- Forum Channels : {guild.ForumChannels.Count}");
         channelBuilder.AppendLine($"- Thread Channels : {guild.ThreadChannels.Count}");
         channelBuilder.AppendLine($"- Stage Channels : {guild.StageChannels.Count}");
-
+        
         AppendChannelInfo(guild.DefaultChannel, "Default Channel");
         AppendChannelInfo(guild.AFKChannel, "AFK Channel");
         AppendChannelInfo(guild.RulesChannel, "Rules Channel");
@@ -457,7 +457,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         AppendChannelInfo(guild.SystemChannel, "System Channel");
         AppendChannelInfo(guild.SafetyAlertsChannel, "Safety Alerts Channel");
         AppendChannelInfo(guild.WidgetChannel, "Widget Channel");
-
+        
         // --- Collect all fields ---
         List<(string, string, bool)> fields = new List<(string, string, bool)>
         {
@@ -466,25 +466,25 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             ("Roles", roleBuilder.ToString(), false),
             ("Channels", channelBuilder.ToString(), false)
         };
-
+        
         List<Embed> pages = await BuildEmbedsFromFields(fields, guild.Name);
-
+        
         await ButtonPaginator.SendPaginatedEmbedsAsync(Context, pages, $"Server Stats for {guild.Name}", ephemeral);
         return;
-
+        
         void AppendChannelInfo(IChannel? channel, string label)
         {
             if (channel != null) channelBuilder.AppendLine($"{label} : {(channel is ITextChannel text ? text.Mention : channel.Name)}");
         }
     }
-
+    
     private static Task<List<Embed>> BuildEmbedsFromFields(List<(string Name, string Value, bool Inline)> fields, string title)
     {
         const int MaxEmbedFieldLength = 1024;
         const int MaxEmbedTotalLength = 6000;
-
+        
         List<Embed> embeds = new List<Embed>();
-
+        
         foreach ((string Name, string Value, bool Inline) field in fields)
         {
             List<Embed> categoryEmbeds = new List<Embed>();
@@ -492,12 +492,12 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 .WithTitle(title)
                 .WithColor(new Color(0, 255, 255))
                 .WithCurrentTimestamp();
-
+            
             int currentLength = 0;
             string[] lines = field.Value.Split('\n');
             StringBuilder chunkBuilder = new StringBuilder();
             int chunkIndex = 0;
-
+            
             foreach (string line in lines)
             {
                 if (chunkBuilder.Length + line.Length + 1 > MaxEmbedFieldLength)
@@ -508,7 +508,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                         field.Inline
                     );
                     currentLength += chunkBuilder.Length;
-
+                    
                     if (currentLength > MaxEmbedTotalLength)
                     {
                         categoryEmbeds.Add(builder.Build());
@@ -518,16 +518,16 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                             .WithCurrentTimestamp();
                         currentLength = 0;
                     }
-
+                    
                     chunkBuilder.Clear();
                     chunkIndex++;
                 }
-
+                
                 if (chunkBuilder.Length > 0)
                     chunkBuilder.AppendLine();
                 chunkBuilder.Append(line);
             }
-
+            
             if (chunkBuilder.Length > 0)
             {
                 builder.AddField(
@@ -536,7 +536,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                     field.Inline
                 );
                 currentLength += chunkBuilder.Length;
-
+                
                 if (currentLength > MaxEmbedTotalLength)
                 {
                     categoryEmbeds.Add(builder.Build());
@@ -546,10 +546,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                         .WithCurrentTimestamp();
                 }
             }
-
+            
             if (builder.Fields.Count > 0)
                 categoryEmbeds.Add(builder.Build());
-
+            
             // If the category has multiple pages, add numbering in title
             if (categoryEmbeds.Count > 1)
             {
@@ -566,10 +566,10 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 single.Title = $"{title} - {field.Name}";
                 categoryEmbeds[0] = single.Build();
             }
-
+            
             embeds.AddRange(categoryEmbeds);
         }
-
+        
         // Add global page numbers in footer
         for (int i = 0; i < embeds.Count; i++)
         {
@@ -577,11 +577,11 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             numbered.Footer = new EmbedFooterBuilder { Text = $"Page {i + 1}/{embeds.Count}" };
             embeds[i] = numbered.Build();
         }
-
+        
         return Task.FromResult(embeds);
     }
-
-
+    
+    
     [SlashCommand("userinfos", "Send infos about the user")]
     public async Task UserInfos(
         [Summary("User", "User to ping for the command")]
@@ -590,7 +590,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         bool ephemeral = true)
     {
         await DeferAsync(ephemeral: ephemeral);
-
+        
         SocketGuildUser contextUser = Context.User as SocketGuildUser;
         user ??= contextUser;
         
@@ -607,7 +607,7 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         baseBuilder.AppendLine($"Id : {user.Id}");
         baseBuilder.AppendLine($"Discriminator : {user.Discriminator}");
         baseBuilder.AppendLine($"Hierarchy in server : {GetHierarchyDisplay(user, Context.Guild)}");
-
+        
         if (user.Activities.Count > 0)
         {
             baseBuilder.AppendLine("\nActivity:");
@@ -625,13 +625,13 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 if (!string.IsNullOrEmpty(line)) baseBuilder.AppendLine(line);
             }
         }
-
+        
         // --- Roles ---
         List<SocketRole> userRoles = user.Roles
             .Where(r => !r.IsEveryone)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         StringBuilder roleBuilder = new StringBuilder();
         roleBuilder.AppendLine($"Total Roles: {userRoles.Count}");
         foreach (SocketRole role in userRoles)
@@ -640,17 +640,17 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             if (role.IsMentionable) roleBuilder.Append(" (***@***)");
             roleBuilder.AppendLine();
         }
-
+        
         // --- Collect fields ---
         List<(string Name, string Value, bool Inline)> fields = new()
         {
             ("User Info", baseBuilder.ToString(), false),
             ("Roles", roleBuilder.ToString(), false)
         };
-
+        
         // --- Build embeds ---
         List<Embed> pages = await BuildEmbedsFromFields(fields, userName);
-
+        
         // --- Add avatar & mention to first embed ---
         for (int i = 0; i < pages.Count; i++)
         {
@@ -662,14 +662,14 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
                 .WithColor(new Color(0, 255, 255)) // cyan
                 .WithThumbnailUrl(avatarUrl)
                 .WithAuthor(userName, avatarUrl, avatarUrl);
-
+            
             // Copy fields
             foreach (EmbedField field in oldEmbed.Fields)
                 builder.AddField(field.Name, field.Value, field.Inline);
-
+            
             pages[i] = builder.Build(); // replace the old embed
         }
-
+        
         // --- Send paginated embeds ---
         await ButtonPaginator.SendPaginatedEmbedsAsync(Context, pages, $"User Stats: {userMention}", ephemeral);
     }
@@ -681,31 +681,31 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             .Where(r => r.Id != guild.Id)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         int totalRoles = rolesOrdered.Count;
-
+        
         // Owner special case
         if (guild.OwnerId == user.Id)
         {
             return $"Owner (0/{totalRoles})";
         }
-
+        
         // Get user roles (excluding @everyone)
         List<SocketRole> userRoles = user.Roles
             .Where(r => r.Id != guild.Id)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         // Roleless = bottom
         if (!userRoles.Any())
         {
             return $"No Roles ({totalRoles}/{totalRoles})";
         }
-
+        
         // Highest role
         SocketRole highestRole = userRoles.First();
         int index = rolesOrdered.IndexOf(highestRole) + 1; // 1-based index
-
+        
         return $"{highestRole.Name} ({index}/{totalRoles})";
     }
     
@@ -716,24 +716,24 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
             .Where(r => r.Id != guild.Id)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         int totalRoles = rolesOrdered.Count;
-
+        
         if (guild.OwnerId == user.Id)
         {
             return 0; // Owner always above
         }
-
+        
         List<SocketRole> userRoles = user.Roles
             .Where(r => r.Id != guild.Id)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         if (!userRoles.Any()) return totalRoles; // Roleless = bottom
         SocketRole highestRole = userRoles.First();
         return rolesOrdered.IndexOf(highestRole) + 1; // 1-based index
-
     }
+    
     private string GetHierarchyRoleMention(SocketGuildUser user, SocketGuild guild)
     {
         // Owner always first
@@ -741,18 +741,18 @@ public class GuildCommands : InteractionModuleBase<SocketInteractionContext>
         {
             return "Owner";
         }
-
+        
         // Exclude @everyone
         List<SocketRole> userRoles = user.Roles
             .Where(r => r.Id != guild.Id)
             .OrderByDescending(r => r.Position)
             .ToList();
-
+        
         if (!userRoles.Any())
         {
             return "No Roles";
         }
-
+        
         // Return highest role as a clickable mention
         SocketRole highestRole = userRoles.First();
         return highestRole.Mention;

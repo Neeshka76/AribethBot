@@ -9,7 +9,7 @@ public class DatabaseContextFactory : IDesignTimeDbContextFactory<DatabaseContex
     {
         DbContextOptionsBuilder<DatabaseContext> optionsBuilder = new DbContextOptionsBuilder<DatabaseContext>();
         optionsBuilder.UseSqlite("Data Source=AribethBot.db"); // same as your runtime DB
-
+        
         return new DatabaseContext(optionsBuilder.Options);
     }
 }

@@ -18,11 +18,11 @@ namespace AribethBot
         private IConfiguration config;
         private DiscordSocketClient socketClient;
         private DiscordSocketConfig socketConfig;
-
+        
         private static string logLevel;
-
+        
         static void Main(string[] args) => new EntryPoint().MainAsync(args.Length != 0 ? args[0] : "").GetAwaiter().GetResult();
-
+        
         private async Task MainAsync(string strLoglevel)
         {
             logLevel = strLoglevel;
@@ -30,7 +30,7 @@ namespace AribethBot
                 .WriteTo.File("Logs/AribethLog.log", rollingInterval: RollingInterval.Day)
                 .WriteTo.Console()
                 .CreateLogger();
-
+            
             socketConfig = new DiscordSocketConfig
             {
                 MessageCacheSize = 1000,
@@ -39,35 +39,35 @@ namespace AribethBot
                 LogGatewayIntentWarnings = false,
                 AlwaysDownloadUsers = true,
             };
-
+            
             IConfigurationBuilder builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "config.json");
             config = builder.Build();
-
+            
             // call ConfigureServices to create the ServiceCollection/Provider for passing around the services
             await using ServiceProvider services = ConfigureServices();
-
+            
             // get the client and assign to client 
             // you get the services via GetRequiredService<T>
             socketClient = services.GetRequiredService<DiscordSocketClient>();
-
+            
             string? token = config["DiscordToken"];
-
+            
             // Must call this to activate them, need a better way to handle that
             services.GetRequiredService<BotLoggingService>();
             services.GetRequiredService<ServerLogger>();
             services.GetRequiredService<SpamTriggerHandler>();
             await services.GetRequiredService<ServiceHandler>().InitializeAsync();
-
+            
             // this is where we get the Token value from the configuration file, and start the bot
             await socketClient.LoginAsync(TokenType.Bot, token);
             await socketClient.StartAsync();
-
+            
             // we get the ServiceHandler class here and call the InitializeAsync method to start things up for the ServiceHandler service
             await Task.Delay(-1);
         }
-
+        
         // this method handles the ServiceCollection creation/configuration, and builds out the service provider we can call on later
         private ServiceProvider ConfigureServices()
         {
@@ -87,11 +87,11 @@ namespace AribethBot
                 .AddSingleton<SpamTriggerHandler>()
                 .AddDbContext<DatabaseContext>() // SQLite DB file;
                 .AddLogging(configure => configure.AddSerilog()); // Logger
-
+            
             // Register ResourceService (pointing to resources.json)
             string resourcePath = Path.Combine(AppContext.BaseDirectory, "resources.json");
             services.AddSingleton(new ResourceService(resourcePath));
-
+            
             LogLevel minLevel = logLevel?.ToLower() switch
             {
                 "info" => LogLevel.Information,

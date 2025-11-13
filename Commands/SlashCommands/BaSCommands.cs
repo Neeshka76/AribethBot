@@ -10,23 +10,23 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
     // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
     private readonly ServiceHandler handler;
     private readonly ResourceService resources;
-
+    
     // constructor injection is also a valid way to access the dependencies
     public BaSCommands(ServiceHandler handler, ResourceService resources)
     {
         this.handler = handler;
         this.resources = resources;
     }
-
+    
     // Link WeaponCrafting
-
+    
     [SlashCommand("weaponcraftingtutorial", "Link to the weapon crafting tutorial for B&S")]
     public async Task WeaponCrafting()
     {
         string? link = resources.Get("WeaponCraftingLink") ?? "Link not set.";
         await RespondAsync(link, ephemeral: true);
     }
-
+    
     // Edit Link WeaponCrafting
     [RequireOwner()]
     [SlashCommand("editweaponcraftingtutorial", "Edit the link to the weapon crafting tutorial for B&S")]
@@ -35,14 +35,14 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         resources.Set("WeaponCraftingLink", url);
         await RespondAsync("Weapon crafting link updated!", ephemeral: true);
     }
-
+    
     [SlashCommand("basbible", "Link to the modding wiki for B&S")]
     public async Task BasWiki()
     {
         string? link = resources.Get("WikiLink") ?? "Link not set.";
         await RespondAsync(link, ephemeral: true);
     }
-
+    
     [RequireOwner()]
     [SlashCommand("editbasbible", "Edit the link to the modding wiki for B&S")]
     public async Task EditBasBible([Summary("URL", "URL for the command")] string url)
@@ -50,7 +50,7 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         resources.Set("WikiLink", url);
         await RespondAsync("Bas Bible link updated!", ephemeral: true);
     }
-
+    
     // Player Log command
     [SlashCommand("log", "Indicate how to get a Player Log")]
     public async Task LogLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
@@ -61,7 +61,7 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         // Return the player log message text
         await RespondAsync($"{message}");
     }
-
+    
     string MessageLogBuilder(SocketUser user, SocketUser contextUser)
     {
         bool hasPCVR = false;
@@ -72,13 +72,13 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 hasPCVR = true;
             }
-
+            
             if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
             {
                 hasNomad = true;
             }
         }
-
+        
         string message = "";
         string messageIntro =
             $"**Hi {user.Mention} !**\r\n\r\n" +
@@ -103,10 +103,10 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         {
             message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
         }
-
+        
         return message;
     }
-
+    
     // Save location command
     [SlashCommand("save", "Indicate how to get to the save folder")]
     public async Task SaveLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
@@ -117,7 +117,7 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         // Return the player log message text
         await RespondAsync($"{message}");
     }
-
+    
     string MessageSaveBuilder(SocketUser user, SocketUser contextUser)
     {
         bool hasPCVR = false;
@@ -128,13 +128,13 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 hasPCVR = true;
             }
-
+            
             if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
             {
                 hasNomad = true;
             }
         }
-
+        
         string message = "";
         string messageIntro =
             $"**Hi {user.Mention} !**\r\n\r\n" +
@@ -158,10 +158,10 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         {
             message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
         }
-
+        
         return message;
     }
-
+    
     // Crash location command
     [SlashCommand("crash", "Indicate how to get to the crash folder")]
     public async Task CrashLocation([Summary("User", "User to ping for the command")] SocketUser? user = null)
@@ -172,7 +172,7 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         // Return the player log message text
         await RespondAsync($"{message}");
     }
-
+    
     string MessageCrashBuilder(SocketUser user, SocketUser contextUser)
     {
         bool hasPCVR = false;
@@ -183,13 +183,13 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 hasPCVR = true;
             }
-
+            
             if (role.Name.Contains("Nomad", StringComparison.CurrentCultureIgnoreCase))
             {
                 hasNomad = true;
             }
         }
-
+        
         string message = "";
         string messageIntro =
             $"**Hi {user.Mention} !**\r\n\r\n" +
@@ -213,7 +213,7 @@ public class BaSCommands : InteractionModuleBase<SocketInteractionContext>
         {
             message = messageIntro + (hasPCVR ? messagePCVR : "") + (hasNomad ? messageNomad : "") + messageOutro;
         }
-
+        
         return message;
     }
 }

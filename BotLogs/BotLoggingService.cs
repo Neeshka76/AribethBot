@@ -19,7 +19,7 @@ namespace AribethBot
         private readonly InteractionService interactCommands;
         private readonly DatabaseContext db;
         private readonly IServiceProvider services;
-
+        
         public BotLoggingService(IServiceProvider services)
         {
             this.services = services;
@@ -35,7 +35,7 @@ namespace AribethBot
             client.Log += OnLogAsync;
             commands.Log += OnLogAsync;
         }
-
+        
         // this method executes on the bot being connected/ready
         public async Task OnReadyAsync()
         {
@@ -56,14 +56,14 @@ namespace AribethBot
                     if (IsDebug())
                     {
                         logger.LogInformation("In Debug mode!");
-                        await PurgeGlobalCommands();    // remove global commands
+                        await PurgeGlobalCommands(); // remove global commands
                         await RegisterGuildCommands(); // register per-guild
                     }
                     else
                     {
                         logger.LogInformation("In Runtime mode!");
-                        await PurgeGlobalCommands();     // always ensure globals are gone
-                        await RegisterGuildCommands();  // only guild commands
+                        await PurgeGlobalCommands(); // always ensure globals are gone
+                        await RegisterGuildCommands(); // only guild commands
                     }
                 }
                 catch (Exception ex)
@@ -89,10 +89,10 @@ namespace AribethBot
             // Apply automatic migrations for the DB
             using IServiceScope scope = services.CreateScope();
             DatabaseContext db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
-
+            
             logger.LogInformation("Checking for pending migrations...");
             IEnumerable<string> pendingMigrations = await db.Database.GetPendingMigrationsAsync();
-
+            
             if (pendingMigrations.Any())
             {
                 logger.LogInformation("Applying {Count} pending migration(s)...", pendingMigrations.Count());
@@ -103,19 +103,19 @@ namespace AribethBot
             {
                 logger.LogInformation("No pending migrations found. Database is up to date.");
             }
-
+            
             foreach (SocketGuild guild in client.Guilds)
             {
                 await GuildHelper.EnsureGuildInDbAsync(guild, db, logger);
             }
         }
-
+        
         private async Task PurgeGlobalCommands()
         {
             logger.LogInformation($"Purging Global Commands");
             await client.Rest.DeleteAllGlobalCommandsAsync();
         }
-
+        
         private async Task RegisterGuildCommands()
         {
             foreach (SocketGuild guild in client.Guilds)
@@ -125,7 +125,7 @@ namespace AribethBot
                 await Task.Delay(500); // Avoid rate limit...
             }
         }
-
+        
         // this method switches out the severity level from Discord.Net's API, and logs appropriately
         public Task OnLogAsync(LogMessage msg)
         {
@@ -139,9 +139,10 @@ namespace AribethBot
                 case "Debug": logger.LogDebug(logText); break;
                 case "Error": logger.LogError(logText); break;
             }
+            
             return Task.CompletedTask;
         }
-
+        
         static bool IsDebug()
         {
 #if DEBUG

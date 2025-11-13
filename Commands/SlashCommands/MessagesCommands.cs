@@ -4,6 +4,7 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
 
 namespace AribethBot;
+
 [Group("messages", "Commands related to messages")]
 public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
 {
@@ -11,7 +12,7 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
     private readonly DiscordSocketClient socketClient;
     private readonly ILogger logger;
     private readonly HttpClient httpClient;
-
+    
     // constructor injection is also a valid way to access the dependencies
     public MessageCommands(ServiceHandler handler)
     {
@@ -19,7 +20,7 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
         logger = handler.Logger;
         httpClient = handler.HttpClient;
     }
-
+    
     [RequireOwner]
     [SlashCommand("purgemsgbot", "Delete a number of recent messages sent by the bot", runMode: RunMode.Async)]
     public async Task PurgeBotMessagesAsync(
@@ -28,29 +29,29 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
     {
         // Cap the amount at 20
         if (amount > 20) amount = 20;
-
+        
         await RespondAsync($"Purging {amount} bot messages...", ephemeral: true);
-
+        
         ITextChannel? channel = (ITextChannel)Context.Channel;
         IEnumerable<IMessage>? messages = await channel.GetMessagesAsync().FlattenAsync();
-
+        
         List<IMessage> botMessages = messages
             .Where(m => m.Author.Id == Context.Client.CurrentUser.Id && m.Flags != MessageFlags.Ephemeral)
             .Take(amount)
             .ToList();
-
+        
         if (!botMessages.Any())
         {
             await FollowupAsync("No bot messages found to delete.", ephemeral: true);
             return;
         }
-
+        
         await channel.DeleteMessagesAsync(botMessages);
         await Task.Delay(500); // slight delay for consistency
         await FollowupAsync($"Deleted {botMessages.Count} bot messages.", ephemeral: true);
     }
-
-
+    
+    
     //[RequireUserPermission(GuildPermission.ManageMessages)]
     //[RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireOwner]
@@ -58,28 +59,28 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
     public async Task PurgeAsync()
     {
         await RespondAsync($"Purging messages in {Context.Channel.Name}...", ephemeral: true);
-
+        
         ITextChannel? channel = (ITextChannel)Context.Channel;
         IEnumerable<IMessage>? allMessages = await channel.GetMessagesAsync(int.MaxValue).FlattenAsync();
-
+        
         if (!allMessages.Any())
         {
             logger.LogInformation("No messages found to delete.");
             return;
         }
-
+        
         // Partition messages into <14 days (bulk deletable) and >=14 days (must delete individually)
         DateTimeOffset cutoff = DateTimeOffset.UtcNow.AddDays(-14);
         List<IMessage> bulkDeletable = allMessages.Where(m => m.Timestamp > cutoff && m.Flags != MessageFlags.Ephemeral).ToList();
         List<IMessage> oldMessages = allMessages.Where(m => m.Timestamp <= cutoff && m.Flags != MessageFlags.Ephemeral).ToList();
-
+        
         // Bulk delete
         if (bulkDeletable.Count > 0)
         {
             logger.LogInformation($"Bulk deleting {bulkDeletable.Count} messages...");
             await channel.DeleteMessagesAsync(bulkDeletable);
         }
-
+        
         // Delete older ones individually
         if (oldMessages.Count > 0)
         {
@@ -90,10 +91,10 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
                 await Task.Delay(200); // prevent hitting rate limits
             }
         }
-
+        
         logger.LogInformation("Purge complete.");
     }
-
+    
     //[RequireUserPermission(GuildPermission.ManageMessages)]
     //[RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireOwner()]
@@ -135,12 +136,12 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
                         await FollowupAsync($"URL : attachment null", ephemeral: true);
                     }
                 }
-
+                
                 await channelToPasteMessagesFrom.SendFilesAsync(fileAttachments, text: message.Content, isTTS: message.IsTTS);
             }
         }
     }
-
+    
     async Task<FileStream> DownloadAndSave(string sourceFile, string destinationFolder, string destinationFileName)
     {
         Stream fileStream = await GetFileStream(sourceFile);
@@ -149,10 +150,10 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
         {
             stream = await SaveStream(fileStream, destinationFolder, destinationFileName);
         }
-
+        
         return stream;
     }
-
+    
     async Task<Stream> GetFileStream(string fileUrl)
     {
         try
@@ -165,7 +166,7 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
             return Stream.Null;
         }
     }
-
+    
     async Task<FileStream> SaveStream(Stream fileStream, string destinationFolder, string destinationFileName)
     {
         if (!Directory.Exists(destinationFolder))
@@ -175,7 +176,7 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
         await fileStream.CopyToAsync(outputFileStream);
         return outputFileStream;
     }
-
+    
     private ulong[] ReturnGuildAndChannelsIDs(string link)
     {
         ulong[] ids = new ulong[2];

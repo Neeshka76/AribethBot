@@ -7,13 +7,13 @@ public class CryptographyCommands : InteractionModuleBase<SocketInteractionConte
 {
     // dependencies can be accessed through Property injection, public properties with public setters will be set by the service provider
     private Cryptography cryptography;
-
+    
     // constructor injection is also a valid way to access the dependecies
     public CryptographyCommands()
     {
         cryptography = new Cryptography();
     }
-
+    
     // Encrypt command
     [SlashCommand("encrypt", "Encrypt a message")]
     public async Task Encrypt([Summary("Cipher", "Cipher to use for the encryption")] Cryptography.Cipher cipher,
@@ -31,7 +31,7 @@ public class CryptographyCommands : InteractionModuleBase<SocketInteractionConte
         // Return the encrypted text
         await RespondAsync($"Your text encrypted with the **{cipher}** cipher with a shift of **{shift}**\n```{result}```");
     }
-
+    
     // Decrypt command
     [SlashCommand("decrypt", "Decrypt a message")]
     public async Task Decrypt([Summary("Cipher", "Cipher to use for the decryption")] Cryptography.Cipher cipher,
