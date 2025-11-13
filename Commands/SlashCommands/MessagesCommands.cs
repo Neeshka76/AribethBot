@@ -21,34 +21,63 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
         httpClient = handler.HttpClient;
     }
     
-    [RequireOwner]
-    [SlashCommand("purgemsgbot", "Delete a number of recent messages sent by the bot", runMode: RunMode.Async)]
-    public async Task PurgeBotMessagesAsync(
-        [Summary("amount", "Number of messages to delete")]
-        int amount = 5) // default value
+    private async Task PurgeMessagesAsync(
+        ITextChannel channel,
+        IEnumerable<IMessage> messages,
+        int amount = int.MaxValue)
     {
-        // Cap the amount at 20
-        if (amount > 20) amount = 20;
-        
-        await RespondAsync($"Purging {amount} bot messages...", ephemeral: true);
-        
-        ITextChannel? channel = (ITextChannel)Context.Channel;
-        IEnumerable<IMessage>? messages = await channel.GetMessagesAsync().FlattenAsync();
-        
-        List<IMessage> botMessages = messages
-            .Where(m => m.Author.Id == Context.Client.CurrentUser.Id && m.Flags != MessageFlags.Ephemeral)
+        // Take only the requested number of messages
+        List<IMessage> toDelete = messages
+            .Where(m => m.Flags != MessageFlags.Ephemeral)
             .Take(amount)
             .ToList();
         
-        if (!botMessages.Any())
-        {
-            await FollowupAsync("No bot messages found to delete.", ephemeral: true);
+        if (!toDelete.Any())
             return;
+        
+        DateTimeOffset cutoff = DateTimeOffset.UtcNow.AddDays(-14);
+        
+        // Split messages into bulk deletable and old
+        List<IMessage> bulkDeletable = toDelete.Where(m => m.Timestamp > cutoff).ToList();
+        List<IMessage> oldMessages = toDelete.Where(m => m.Timestamp <= cutoff).ToList();
+        
+        if (bulkDeletable.Count > 0)
+            await channel.DeleteMessagesAsync(bulkDeletable);
+        
+        foreach (IMessage msg in oldMessages)
+        {
+            await msg.DeleteAsync();
+            await Task.Delay(200); // prevent rate limits
+        }
+    }
+    
+    [RequireOwner]
+    [SlashCommand("purgemsgbot", "Delete a number of recent messages sent by the bot", runMode: RunMode.Async)]
+    public async Task PurgeBotMessagesAsync(
+        [Summary("amount", "Number of bot messages to delete")]
+        int amount = 5)
+    {
+        switch (amount)
+        {
+            case <= 0:
+                await RespondAsync("Please specify a positive number of messages to delete.", ephemeral: true);
+                return;
+            case > 20:
+                amount = 20;
+                break;
         }
         
-        await channel.DeleteMessagesAsync(botMessages);
-        await Task.Delay(500); // slight delay for consistency
-        await FollowupAsync($"Deleted {botMessages.Count} bot messages.", ephemeral: true);
+        await RespondAsync($"Purging {amount} bot messages in {Context.Channel.Name}...", ephemeral: true);
+        
+        ITextChannel channel = (ITextChannel)Context.Channel;
+        IEnumerable<IMessage>? messages = await channel.GetMessagesAsync(100).FlattenAsync(); // fetch recent messages
+        
+        IEnumerable<IMessage> botMessages = messages
+            .Where(m => m.Author.Id == Context.Client.CurrentUser.Id)
+            .Take(amount);
+        
+        await PurgeMessagesAsync(channel, botMessages, amount);
+        await FollowupAsync($"Deleted {botMessages.Count()} bot messages.", ephemeral: true);
     }
     
     
@@ -60,39 +89,11 @@ public class MessageCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await RespondAsync($"Purging messages in {Context.Channel.Name}...", ephemeral: true);
         
-        ITextChannel? channel = (ITextChannel)Context.Channel;
-        IEnumerable<IMessage>? allMessages = await channel.GetMessagesAsync(int.MaxValue).FlattenAsync();
+        ITextChannel channel = (ITextChannel)Context.Channel;
+        IEnumerable<IMessage>? messages = await channel.GetMessagesAsync(int.MaxValue).FlattenAsync(); // fetch all messages
         
-        if (!allMessages.Any())
-        {
-            logger.LogInformation("No messages found to delete.");
-            return;
-        }
-        
-        // Partition messages into <14 days (bulk deletable) and >=14 days (must delete individually)
-        DateTimeOffset cutoff = DateTimeOffset.UtcNow.AddDays(-14);
-        List<IMessage> bulkDeletable = allMessages.Where(m => m.Timestamp > cutoff && m.Flags != MessageFlags.Ephemeral).ToList();
-        List<IMessage> oldMessages = allMessages.Where(m => m.Timestamp <= cutoff && m.Flags != MessageFlags.Ephemeral).ToList();
-        
-        // Bulk delete
-        if (bulkDeletable.Count > 0)
-        {
-            logger.LogInformation($"Bulk deleting {bulkDeletable.Count} messages...");
-            await channel.DeleteMessagesAsync(bulkDeletable);
-        }
-        
-        // Delete older ones individually
-        if (oldMessages.Count > 0)
-        {
-            logger.LogInformation($"Individually deleting {oldMessages.Count} old messages...");
-            foreach (IMessage msg in oldMessages)
-            {
-                await msg.DeleteAsync();
-                await Task.Delay(200); // prevent hitting rate limits
-            }
-        }
-        
-        logger.LogInformation("Purge complete.");
+        await PurgeMessagesAsync(channel, messages);
+        await FollowupAsync("Purge complete.", ephemeral: true);
     }
     
     //[RequireUserPermission(GuildPermission.ManageMessages)]
