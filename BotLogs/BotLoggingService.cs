@@ -20,6 +20,12 @@ namespace AribethBot
         private readonly DatabaseContext db;
         private readonly IServiceProvider services;
         
+        private DateTime firstGatewayDisconnect = DateTime.MinValue;
+        private DateTime lastGatewayWarning = DateTime.MinValue;
+        private bool gatewayDisconnected = false;
+        
+        private static readonly TimeSpan GatewayWarningInterval = TimeSpan.FromHours(1);
+        
         public BotLoggingService(IServiceProvider services)
         {
             this.services = services;
@@ -30,10 +36,20 @@ namespace AribethBot
             interactCommands = services.GetRequiredService<InteractionService>();
             db = services.GetRequiredService<DatabaseContext>();
             // hook into these events with the methods provided below
+            client.Connected += ClientOnConnected;
             client.Ready += OnReadyAsync;
             client.JoinedGuild += OnJoinedGuildAsync;
             client.Log += OnLogAsync;
             commands.Log += OnLogAsync;
+        }
+        
+        private Task ClientOnConnected()
+        {
+            // Reset the check of disconnection for the interval check
+            gatewayDisconnected = false;
+            firstGatewayDisconnect = DateTime.MinValue;
+            lastGatewayWarning = DateTime.MinValue;
+            return Task.CompletedTask;
         }
         
         // this method executes on the bot being connected/ready
@@ -129,15 +145,54 @@ namespace AribethBot
         // this method switches out the severity level from Discord.Net's API, and logs appropriately
         public Task OnLogAsync(LogMessage msg)
         {
-            string logText = $"{msg.Source}: {msg.Exception?.ToString() ?? msg.Message}";
-            switch (msg.Severity.ToString())
+            // Handle gateway disconnect warning (rate-limited to once per hour)
+            if (msg.Source == "Gateway" &&
+                ((msg.Exception is System.Net.WebSockets.WebSocketException && msg.Severity == LogSeverity.Warning)
+                 || (msg.Message == "Disconnecting" && msg.Severity == LogSeverity.Info)
+                 || (msg.Message == "Disconnected" && msg.Severity == LogSeverity.Info)
+                 || (msg.Message == "Connecting" && msg.Severity == LogSeverity.Info)
+                ))
             {
-                case "Critical": logger.LogCritical(logText); break;
-                case "Warning": logger.LogWarning(logText); break;
-                case "Info": logger.LogInformation(logText); break;
-                case "Verbose": logger.LogInformation(logText); break;
-                case "Debug": logger.LogDebug(logText); break;
-                case "Error": logger.LogError(logText); break;
+                DateTime now = DateTime.UtcNow;
+                
+                // First disconnect
+                if (!gatewayDisconnected)
+                {
+                    logger.LogWarning(
+                        "Gateway disconnected: {Reason}",
+                        msg.Exception.Message
+                    );
+                    gatewayDisconnected = true;
+                    firstGatewayDisconnect = now;
+                    lastGatewayWarning = now;
+                }
+                // Hourly reminder
+                else if (now - lastGatewayWarning >= GatewayWarningInterval)
+                {
+                    double elapsedHours = (now - firstGatewayDisconnect).TotalHours;
+                    
+                    logger.LogWarning(
+                        "Gateway still disconnected after {ElapsedHours:F1} hour(s).",
+                        elapsedHours
+                    );
+                    
+                    lastGatewayWarning = now;
+                }
+                
+                // Ignore all other gateway spam
+                return Task.CompletedTask;
+            }
+            
+            // Default logging behavior for everything else
+            string logText = $"{msg.Source}: {msg.Exception?.ToString() ?? msg.Message}";
+            switch (msg.Severity)
+            {
+                case LogSeverity.Critical: logger.LogCritical(logText); break;
+                case LogSeverity.Error: logger.LogError(logText); break;
+                case LogSeverity.Warning: logger.LogWarning(logText); break;
+                case LogSeverity.Info: logger.LogInformation(logText); break;
+                case LogSeverity.Verbose: logger.LogInformation(logText); break;
+                case LogSeverity.Debug: logger.LogDebug(logText); break;
             }
             
             return Task.CompletedTask;

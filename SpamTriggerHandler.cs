@@ -118,7 +118,7 @@ public class SpamTriggerHandler
         switch (trigger.ActionType)
         {
             case SpamAction.Ban:
-                await user.BanAsync(1, $"Aribeth smited the spammer");
+                await user.BanAsync(1, $"Aribeth smote the spammer");
                 break;
             case SpamAction.Kick:
                 await user.KickAsync($"Aribeth blessed the guild and removed the spammer");
