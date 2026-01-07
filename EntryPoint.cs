@@ -58,6 +58,7 @@ namespace AribethBot
             services.GetRequiredService<BotLoggingService>();
             services.GetRequiredService<ServerLogger>();
             services.GetRequiredService<SpamTriggerHandler>();
+            services.GetRequiredService<ReactionHandler>();
             await services.GetRequiredService<ServiceHandler>().InitializeAsync();
             
             // this is where we get the Token value from the configuration file, and start the bot
@@ -84,6 +85,7 @@ namespace AribethBot
                 .AddSingleton<ServiceHandler>()
                 .AddSingleton<BotLoggingService>()
                 .AddSingleton<ServerLogger>()
+                .AddSingleton<ReactionHandler>()
                 .AddSingleton<SpamTriggerHandler>()
                 .AddDbContext<DatabaseContext>() // SQLite DB file;
                 .AddLogging(configure => configure.AddSerilog()); // Logger
