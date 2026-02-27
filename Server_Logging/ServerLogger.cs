@@ -25,6 +25,8 @@ public class ServerLogger
         // Subscribe to events
         socketClient.MessageDeleted += OnMessageDeleted;
         socketClient.MessageUpdated += OnMessageUpdated;
+        socketClient.ThreadDeleted += OnThreadDeleted;
+        socketClient.ThreadUpdated += OnThreadUpdated;
         socketClient.UserBanned += OnUserBanned;
         socketClient.UserUnbanned += OnUserUnbanned;
         socketClient.UserJoined += OnUserJoined;
@@ -138,6 +140,67 @@ public class ServerLogger
             .WithAuthor(userMessage.Author.Username, userMessage.Author.GetAvatarUrl())
             .WithTitle($"Message updated in <#{userMessage.Channel.Id}>")
             .WithDescription($"**Before:** {userMessage.Content}\n**After:** {updatedMessage.Content}")
+            .WithColor(Color.Blue)
+            .WithCurrentTimestamp();
+        
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+    
+    private async Task OnThreadDeleted(Cacheable<SocketThreadChannel, ulong> cache)
+    {
+        SocketThreadChannel? thread = await cache.GetOrDownloadAsync();
+        if (thread == null) return;
+        
+        ulong guildId = thread.Guild.Id;
+        
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelDeletedLog");
+        if (logChannel == null) return;
+        
+        string creatorName = thread.Owner?.Username ?? "Unknown";
+        string? avatarUrl = thread.Owner?.GetAvatarUrl();
+        
+        EmbedBuilder embed = new EmbedBuilder()
+            .WithAuthor(creatorName, avatarUrl)
+            .WithTitle($"Thread deleted in <#{thread.ParentChannel.Id}>")
+            .WithDescription($"**Thread Name:** {thread.Name}")
+            .WithColor(Color.Red)
+            .WithCurrentTimestamp();
+        
+        await logChannel.SendMessageAsync(embed: embed.Build());
+    }
+    
+    private async Task OnThreadUpdated(
+        Cacheable<SocketThreadChannel, ulong> beforeCache,
+        SocketThreadChannel after)
+    {
+        SocketThreadChannel? before = await beforeCache.GetOrDownloadAsync();
+        if (before == null) return;
+        
+        ulong guildId = after.Guild.Id;
+        
+        IMessageChannel? logChannel = await GetLogChannel(guildId, "channelEditedLog");
+        if (logChannel == null) return;
+        
+        string creatorName = after.Owner?.Username ?? "Unknown";
+        string? avatarUrl = after.Owner?.GetAvatarUrl();
+        
+        List<string> changes = new();
+        
+        if (before.Name != after.Name)
+            changes.Add($"**Name:** {before.Name}\n→ {after.Name}");
+        
+        if (before.IsArchived != after.IsArchived)
+            changes.Add($"**Archived:** {before.IsArchived}\n→ {after.IsArchived}");
+        
+        if (before.IsLocked != after.IsLocked)
+            changes.Add($"**Locked:** {before.IsLocked}\n→ {after.IsLocked}");
+        
+        if (changes.Count == 0) return;
+        
+        EmbedBuilder embed = new EmbedBuilder()
+            .WithAuthor(creatorName, avatarUrl)
+            .WithTitle($"Thread updated in <#{after.ParentChannel.Id}>")
+            .WithDescription(string.Join("\n\n", changes))
             .WithColor(Color.Blue)
             .WithCurrentTimestamp();
         

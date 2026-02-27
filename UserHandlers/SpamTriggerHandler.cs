@@ -144,13 +144,46 @@ public class SpamTriggerHandler
             return 0;
         
         int deletedCount = 0;
-        // Group messages by channel (BulkDelete works per-channel)
-        IEnumerable<IGrouping<ulong, SocketUserMessage>> channelGroups = messagesToDelete.GroupBy(m => m.Channel.Id);
+        
+        // Collect threads to delete
+        HashSet<IThreadChannel> threadsToDelete = new HashSet<IThreadChannel>();
+        
+        foreach (SocketUserMessage msg in messagesToDelete)
+        {
+            if (msg.Channel is IThreadChannel thread &&
+                msg.Id == thread.Id) // starter message
+            {
+                threadsToDelete.Add(thread);
+            }
+        }
+        
+        // Delete full threads first
+        foreach (IThreadChannel thread in threadsToDelete)
+        {
+            try
+            {
+                await thread.DeleteAsync();
+                deletedCount++; // counts as 1 logical deletion
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, $"Failed to delete thread {thread.Name} ({thread.Id})");
+            }
+        }
+        
+        // Remove messages that belonged to deleted threads
+        messagesToDelete.RemoveAll(m =>
+            m.Channel is IThreadChannel t && threadsToDelete.Contains(t));
+        
+        // Handle normal text channels
+        IEnumerable<IGrouping<ulong, SocketUserMessage>> channelGroups = messagesToDelete
+            .Where(m => m.Channel is ITextChannel)
+            .GroupBy(m => m.Channel.Id);
+        
         foreach (IGrouping<ulong, SocketUserMessage> group in channelGroups)
         {
             if (socketClient.GetChannel(group.Key) is not ITextChannel textChannel)
                 continue;
-            // Only recent (< 14 days) can be bulk-deleted
             List<SocketUserMessage> recentMessages = group
                 .Where(m => (DateTimeOffset.UtcNow - m.Timestamp).TotalDays < 14)
                 .ToList();
@@ -161,10 +194,8 @@ public class SpamTriggerHandler
                     await textChannel.DeleteMessagesAsync(recentMessages);
                     deletedCount += recentMessages.Count;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    logger.LogWarning(ex, $"Bulk delete failed in {textChannel.Name} ({textChannel.Id})");
-                    // fallback to individual deletes
                     foreach (SocketUserMessage msg in recentMessages)
                     {
                         try
@@ -174,14 +205,13 @@ public class SpamTriggerHandler
                         }
                         catch
                         {
-                            /* ignore */
+                            // ignored
                         }
                     }
                 }
             }
             else
             {
-                // Just 1 message or too old → delete individually
                 foreach (SocketUserMessage msg in group)
                 {
                     try
@@ -191,7 +221,7 @@ public class SpamTriggerHandler
                     }
                     catch
                     {
-                        /* ignore */
+                        // ignored
                     }
                 }
             }
