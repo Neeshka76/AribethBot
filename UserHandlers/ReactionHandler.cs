@@ -23,7 +23,7 @@ public class ReactionHandler
     {
         socketClient = services.GetRequiredService<DiscordSocketClient>();
         db = services.GetRequiredService<DatabaseContext>();
-        logger = services.GetRequiredService<ILogger<SpamTriggerHandler>>();
+        logger = services.GetRequiredService<ILogger<ReactionHandler>>();
         socketClient.ReactionAdded += HandleReactionAddedAsync;
     }
     
@@ -50,17 +50,6 @@ public class ReactionHandler
                 await message.RemoveReactionAsync(emoji, reaction.User.Value);
             }
         }
-        
-        // Check for custom emoji
-        //if (reaction.Emote is Emote customEmote)
-        //{
-        //    // If you want to block custom emojis by name or ID
-        //    if (blockedCustomEmojis.Contains(customEmote.Name) || blockedCustomEmojis.Contains(customEmote.Id.ToString()))
-        //    {
-        //        IUserMessage? message = await cacheable.GetOrDownloadAsync();
-        //        await message.RemoveReactionAsync(customEmote, reaction.User.Value);
-        //    }
-        //}
     }
     
 }

@@ -34,11 +34,13 @@ public class ServerLogger
         socketClient.UserVoiceStateUpdated += OnUserVoiceStateUpdated;
         
         // Clean up cache on guild leave
-        socketClient.LeftGuild += guild =>
-        {
-            guildCache.Remove(guild.Id);
-            return Task.CompletedTask;
-        };
+        socketClient.LeftGuild += SocketClientOnLeftGuild;
+    }
+    
+    private Task SocketClientOnLeftGuild(SocketGuild guild)
+    {
+        guildCache.Remove(guild.Id);
+        return Task.CompletedTask;
     }
     
     // Called by SetLogChannel command after saving changes

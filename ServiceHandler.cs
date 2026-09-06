@@ -1,8 +1,6 @@
 ﻿using Discord;
-using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -15,8 +13,6 @@ namespace AribethBot
         public readonly DiscordSocketClient SocketClient;
         private readonly InteractionService interactions;
         public readonly ILogger Logger;
-        private readonly CommandService commands;
-        public IConfiguration Config;
         public readonly HttpClient HttpClient;
         
         public ServiceHandler(IServiceProvider services)
@@ -25,8 +21,6 @@ namespace AribethBot
             SocketClient = this.services.GetRequiredService<DiscordSocketClient>();
             interactions = this.services.GetRequiredService<InteractionService>();
             Logger = this.services.GetRequiredService<ILogger<ServiceHandler>>();
-            commands = this.services.GetRequiredService<CommandService>();
-            Config = this.services.GetRequiredService<IConfiguration>();
             HttpClient = new HttpClient();
             // process the InteractionCreated payloads to execute Interactions commands
             SocketClient.InteractionCreated += HandleInteraction;
@@ -34,25 +28,6 @@ namespace AribethBot
             interactions.SlashCommandExecuted += SlashCommandExecuted;
             interactions.ContextCommandExecuted += ContextCommandExecuted;
             interactions.ComponentCommandExecuted += ComponentCommandExecuted;
-            commands.CommandExecuted += Commands_CommandExecuted;
-        }
-        
-        private async Task Commands_CommandExecuted(Optional<CommandInfo> command, ICommandContext context, Discord.Commands.IResult result)
-        {
-            // if a command isn't found, log that info to console and exit this method
-            if (!command.IsSpecified)
-            {
-                Logger.LogError($"Command failed to execute by [{context.User.Username}] on [{context.Guild.Name}] <-> [{result.ErrorReason}]!");
-                // failure scenario, let's let the user know
-                await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong -> [{result}]!");
-                return;
-            }
-            
-            // log success to the console and exit this method
-            if (result.IsSuccess)
-            {
-                Logger.LogInformation($"Command [{command.Value.Name}] executed by [{context.User.Username}] on [{context.Guild.Name}]");
-            }
         }
         
         public async Task InitializeAsync()

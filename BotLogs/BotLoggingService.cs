@@ -158,10 +158,7 @@ namespace AribethBot
                 // First disconnect
                 if (!gatewayDisconnected)
                 {
-                    logger.LogWarning(
-                        "Gateway disconnected: {Reason}",
-                        msg.Exception.Message
-                    );
+                    logger.LogWarning("Gateway disconnected: {Reason}", msg.Exception.Message);
                     gatewayDisconnected = true;
                     firstGatewayDisconnect = now;
                     lastGatewayWarning = now;
@@ -170,12 +167,7 @@ namespace AribethBot
                 else if (now - lastGatewayWarning >= GatewayWarningInterval)
                 {
                     double elapsedHours = (now - firstGatewayDisconnect).TotalHours;
-                    
-                    logger.LogWarning(
-                        "Gateway still disconnected after {ElapsedHours:F1} hour(s).",
-                        elapsedHours
-                    );
-                    
+                    logger.LogWarning("Gateway still disconnected after {ElapsedHours:F1} hour(s).", elapsedHours);
                     lastGatewayWarning = now;
                 }
                 
