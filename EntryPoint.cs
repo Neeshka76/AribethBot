@@ -34,10 +34,10 @@ namespace AribethBot
             _socketConfig = new DiscordSocketConfig
             {
                 MessageCacheSize = 1000,
-                GatewayIntents = GatewayIntents.All,
+                GatewayIntents = GatewayIntents.AllUnprivileged,
                 UseInteractionSnowflakeDate = false,
                 LogGatewayIntentWarnings = false,
-                AlwaysDownloadUsers = true,
+                AlwaysDownloadUsers = false,
             };
             
             IConfigurationBuilder builder = new ConfigurationBuilder()
